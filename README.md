@@ -1,4 +1,4 @@
-# fookm’s Projeft
+# Fookm’s Project
 
 Station Inventory is a multi-workstation order and inventory application. The live site is [Station Inventory Hub](https://station-inventory-hub.sensoredrooster-com.chatgpt.site).
 
