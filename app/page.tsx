@@ -17,7 +17,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         <div className="gateway-label">STAFF WORKSPACE</div>
         <h1>Open your workstation floor</h1>
         <p>Your floor plan, station handoffs, orders, inventory, and item catalog are in the workspace.</p>
-        {user ? <div className="gateway-alert" role="alert">Signed in as <strong>{user.email}</strong>. This account does not have access to the workspace. Sign in with the account that owns it.</div> : null}
+        {user ? <div className="gateway-alert" role="alert">Signed in as <strong>{user.email}</strong>. This account does not have access to the workspace. Switch to an account that has been invited.</div> : null}
         <a className="gateway-button" href={user ? chatGPTSignOutPath(`/?view=${view}`) : chatGPTSignInPath(`/?view=${view}`)} target="_top">{user ? "Switch ChatGPT account" : "Sign in to workspace"} →</a>
       </div>
       <nav className="gateway-sections" aria-label="Workspace sections">
