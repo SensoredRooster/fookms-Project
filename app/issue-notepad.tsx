@@ -44,6 +44,7 @@ export default function IssueNotepad({ initialScreen }: { initialScreen: Screen 
       setTitle(""); setDetails(""); setSteps(""); setSeverity("normal"); setFilter("open");
       setNotice("Issue saved. The developer can review it here.");
       await load();
+      window.dispatchEvent(new Event("station-issues-changed"));
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save note."); }
     finally { setBusy(false); }
   }
@@ -57,6 +58,7 @@ export default function IssueNotepad({ initialScreen }: { initialScreen: Screen 
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Could not update issue.");
       setNotice(`Issue ${status}.`); await load();
+      window.dispatchEvent(new Event("station-issues-changed"));
     } catch (e) { setError(e instanceof Error ? e.message : "Could not update issue."); }
     finally { setBusy(false); }
   }
