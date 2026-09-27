@@ -45,7 +45,7 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .badge-processing { background:#fff3db; color:#986719; text-transform:capitalize }
 .badge-fulfilled { background:#e4f5ef; color:#25775e; text-transform:capitalize }
 .badge-cancelled { background:#f0f1f2; color:#687780; text-transform:capitalize }
-.order-line { display:grid; grid-template-columns:minmax(0,1fr) 78px auto; gap:8px; align-items:center }
+.order-line { display:grid; grid-template-columns:minmax(0,1fr) 110px 145px auto; gap:8px; align-items:center }
 .order-line input { min-width:0 }
 .order-detail { display:grid; gap:18px }
 .detail-meta { display:flex; flex-wrap:wrap; gap:18px; padding:12px 0; font-size:13px; color:#71838b }
@@ -64,7 +64,8 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
   .rail-heading { display:flex; margin:0; padding:0 3px; font-size:0 }
   .rail-heading span { display:none }
   .rail-heading button { background:#264a58; padding:7px; border-radius:7px; color:#fff }
-  .order-line { grid-template-columns:minmax(0,1fr) 65px }
+  .order-line { grid-template-columns:minmax(0,1fr) minmax(110px,.5fr) }
+  .order-line input:nth-of-type(2) { grid-column:1 / -1 }
   .order-line button { grid-column:1 / -1; justify-self:end }
 }
 .workflow-lines { display:grid; gap:14px }
@@ -108,7 +109,7 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .public-card { background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 30px #173c4c0b; padding:32px }
 .public-card h2 { font-size:19px; margin:0; letter-spacing:-.02em }
 .public-divider { border-top:1px solid var(--border); margin:8px 0 }
-.public-order-line { display:grid; grid-template-columns:minmax(0,1fr) 120px auto; align-items:end; gap:12px; padding:10px 0 }
+.public-order-line { display:grid; grid-template-columns:minmax(0,1fr) 110px 140px auto; align-items:end; gap:12px; padding:10px 0 }
 .public-order-line button { margin-bottom:1px }
 .public-card .field small { font-weight:400; color:#6b7e86 }
 .public-card textarea { border:1px solid var(--input); border-radius:8px; background:#fff; padding:10px 12px; font:inherit; font-size:14px; resize:vertical; outline:none }
@@ -118,7 +119,7 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .public-success { max-width:650px; margin:80px auto }
 .public-success p { line-height:1.65; color:#566c77; margin:20px 0 26px }
 .honeypot { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden }
-@media(max-width:700px) { .public-top { padding:0 18px }.public-main { padding:30px 16px 70px }.public-heading h1 { font-size:32px }.public-card { padding:20px }.public-card .form-grid { grid-template-columns:1fr }.public-order-line { grid-template-columns:minmax(0,1fr) 85px auto; gap:6px }.public-submit { align-items:stretch; flex-direction:column }.public-submit button { width:100% } }
+@media(max-width:700px) { .public-top { padding:0 18px }.public-main { padding:30px 16px 70px }.public-heading h1 { font-size:32px }.public-card { padding:20px }.public-card .form-grid { grid-template-columns:1fr }.public-order-line { grid-template-columns:minmax(0,1fr) minmax(90px,.5fr); gap:8px }.public-order-line .field:nth-child(3) { grid-column:1 / -1 }.public-order-line button { grid-column:1 / -1; justify-self:end }.public-submit { align-items:stretch; flex-direction:column }.public-submit button { width:100% } }
 /* Workspace navigation */
 .rail { position:sticky; top:0; height:100vh; overflow-y:auto }
 .brand-button { width:100%; border:0; background:transparent; text-align:left; cursor:pointer }

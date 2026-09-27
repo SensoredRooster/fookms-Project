@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { NextResponse } from "next/server";
 import { isStaff } from "@/app/staff-auth";
-import { createOrder, OrderInputError } from "@/app/order-create";
+import { createOrder, updateOrder, OrderInputError } from "@/app/order-create";
 
 export const dynamic = "force-dynamic";
 const db = () => {
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ events: events.results });
     }
     const [orders, lines] = await Promise.all([
-      database.prepare("SELECT id, number, station_id AS stationId, requested_by AS requestedBy, source, contact_email AS contactEmail, contact_phone AS contactPhone, note, status, created_at AS createdAt, updated_at AS updatedAt FROM orders ORDER BY id DESC LIMIT 250").all(),
-      database.prepare("SELECT l.order_id AS orderId, l.item_id AS itemId, l.quantity, l.original_item_id AS originalItemId, l.original_quantity AS originalQuantity, COALESCE(l.current_station_id, o.station_id) AS currentStationId, l.action_done AS actionDone, l.completed_at AS completedAt FROM order_lines l JOIN (SELECT id, station_id FROM orders ORDER BY id DESC LIMIT 250) o ON o.id = l.order_id ORDER BY l.order_id DESC").all(),
+      database.prepare("SELECT id, number, station_id AS stationId, requested_by AS requestedBy, purchase_order_number AS purchaseOrderNumber, source, contact_email AS contactEmail, contact_phone AS contactPhone, note, status, created_at AS createdAt, updated_at AS updatedAt FROM orders ORDER BY id DESC LIMIT 250").all(),
+      database.prepare("SELECT l.order_id AS orderId, l.item_id AS itemId, l.quantity, l.cut_length_inches AS cutLengthInches, l.original_item_id AS originalItemId, l.original_quantity AS originalQuantity, COALESCE(l.current_station_id, o.station_id) AS currentStationId, l.action_done AS actionDone, l.completed_at AS completedAt FROM order_lines l JOIN (SELECT id, station_id FROM orders ORDER BY id DESC LIMIT 250) o ON o.id = l.order_id ORDER BY l.order_id DESC").all(),
     ]);
     return NextResponse.json({ orders: orders.results, lines: lines.results });
   } catch (error) {
@@ -42,6 +42,10 @@ export async function POST(request: Request) {
     if (body.action === "create") {
       if (body.source !== "phone" && body.source !== "walk_in") return fail("Choose phone or walk-in as the order source.");
       const number = await createOrder(database, body, body.source);
+      return NextResponse.json({ ok: true, number });
+    }
+    if (body.action === "update") {
+      const number = await updateOrder(database, body);
       return NextResponse.json({ ok: true, number });
     }
     if (body.action === "status") {

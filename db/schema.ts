@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, primaryKey, check } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, primaryKey, check } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 export const stations = sqliteTable("stations", {
@@ -43,6 +43,7 @@ export const orders = sqliteTable("orders", {
   number: text("number").notNull().unique(),
   stationId: integer("station_id").notNull().references(() => stations.id),
   requestedBy: text("requested_by").notNull().default(""),
+  purchaseOrderNumber: text("purchase_order_number").notNull().default(""),
   source: text("source").notNull().default("staff"),
   contactEmail: text("contact_email").notNull().default(""),
   contactPhone: text("contact_phone").notNull().default(""),
@@ -56,6 +57,7 @@ export const orderLines = sqliteTable("order_lines", {
   orderId: integer("order_id").notNull().references(() => orders.id),
   itemId: integer("item_id").notNull().references(() => items.id),
   quantity: integer("quantity").notNull(),
+  cutLengthInches: real("cut_length_inches"),
   originalItemId: integer("original_item_id").references(() => items.id),
   originalQuantity: integer("original_quantity"),
   currentStationId: integer("current_station_id").references(() => stations.id),
