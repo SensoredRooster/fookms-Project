@@ -92,3 +92,17 @@ export const floorFeatures = sqliteTable("floor_features", {
   width: integer("width").notNull(),
   height: integer("height").notNull(),
 });
+
+export const issueReports = sqliteTable("issue_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  reporterId: text("reporter_id").notNull(),
+  reporterEmail: text("reporter_email").notNull(),
+  title: text("title").notNull(),
+  details: text("details").notNull(),
+  steps: text("steps").notNull().default(""),
+  screen: text("screen").notNull(),
+  severity: text("severity").notNull().default("normal"),
+  status: text("status").notNull().default("open"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

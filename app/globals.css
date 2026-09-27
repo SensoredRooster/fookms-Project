@@ -170,7 +170,7 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .inspector-links { display:grid; gap:7px }
 @media(max-width:1180px) { .floor-layout { grid-template-columns:1fr }.floor-inspector { position:static } }
 @media(max-width:740px) {
- .rail { display:grid; grid-template-columns:repeat(6,max-content); gap:5px; height:auto; min-height:0; position:relative; padding:12px 14px; overflow-x:auto; overflow-y:hidden }
+ .rail { display:grid; grid-template-columns:repeat(7,max-content); gap:5px; height:auto; min-height:0; position:relative; padding:12px 14px; overflow-x:auto; overflow-y:hidden }
  .rail .brand { grid-column:1/-1; width:max-content; margin-bottom:5px }
  .rail .rail-label,.rail .rail-bottom { display:none }
  .rail .rail-link { width:auto; font-size:14px; gap:7px; padding:9px 11px; white-space:nowrap }
@@ -181,5 +181,17 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 }
 @media(max-width:420px) {
  .rail .rail-link { font-size:14px; gap:7px }
- .rail .rail-link svg { width:17px; height:17px }
+.rail .rail-link svg { width:17px; height:17px }
 }
+.issue-quick { position:fixed; right:24px; bottom:24px; z-index:20; display:flex; align-items:center; gap:9px; background:#173c4c; color:#fff; border:1px solid #4ba99f; border-radius:999px; padding:13px 19px; box-shadow:0 12px 28px #173c4c44; font-weight:700; font-size:14px }
+.issue-quick:hover,.issue-quick:focus-visible { background:#28636b; outline:2px solid #53c7b7; outline-offset:2px }
+.issues-layout { display:grid; grid-template-columns:minmax(320px,.85fr) minmax(0,1.15fr); gap:20px; align-items:start }
+.issues-compose,.issues-list { padding:25px }.issues-compose h2,.issues-list h2 { display:flex; align-items:center; gap:9px; font-size:19px; margin:0 0 22px; letter-spacing:-.02em }
+.issues-compose .form { gap:17px }.issues-compose .field select { display:block; width:100%; min-height:42px; border:1px solid var(--input); border-radius:7px; padding:8px 10px; background:#fff; color:var(--foreground); font:inherit }
+.issues-compose .field textarea { width:100%; min-height:90px; resize:vertical; font:inherit; line-height:1.5 }
+.issues-compose-footer { display:flex; align-items:center; justify-content:space-between; gap:12px }.issues-compose-footer small { color:#70818a; font-size:13px; line-height:1.4 }
+.issues-list-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:18px }.issues-list-head h2 { margin:0 0 5px }.issues-list-head p { margin:0; color:#70818a; font-size:13px }
+.issues-filters { display:flex; flex-wrap:wrap; gap:4px; background:#edf3f4; padding:4px; border-radius:8px }.issues-filters button { border:0; background:transparent; color:#56717a; border-radius:6px; padding:7px 11px; text-transform:capitalize; font-size:13px; font-weight:700 }.issues-filters button.active { color:#173c4c; background:#fff; box-shadow:0 1px 3px #173c4c20 }
+.issues-cards { display:grid; gap:14px; padding-top:18px }.issue-card { border:1px solid var(--border); background:#fcfefe; border-radius:10px; padding:18px; overflow-wrap:anywhere }.issue-card-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:11px }.issue-priority { font-size:12px; color:#506f7b; font-weight:800; text-transform:capitalize }.priority-high { color:#a54338 }.priority-low { color:#647881 }.issue-card h3 { margin:0 0 6px; font-size:16px; line-height:1.4 }.issue-meta { color:#6f838b; font-size:12px; line-height:1.5 }.issue-card p { white-space:pre-wrap; line-height:1.55; font-size:14px; margin:14px 0 }.issue-steps { background:#eef5f6; padding:12px; border-radius:8px; margin:13px 0 }.issue-steps strong { font-size:12px; color:#54717a; letter-spacing:.04em }.issue-steps p { margin:6px 0 0 }
+@media(max-width:1080px) { .issues-layout { grid-template-columns:1fr } }
+@media(max-width:740px) { .issue-quick { right:14px; bottom:14px; padding:12px 16px }.issues-compose,.issues-list { padding:18px }.issues-compose-footer { align-items:stretch; flex-direction:column }.issues-compose-footer button { width:100% } }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2 } from "lucide-react";
+import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import Orders from "./orders";
 import FloorPlan from "./floor-plan";
+import IssueNotepad from "./issue-notepad";
 
 type Station = { id: number; name: string; location: string; action: string; onlineIntake: number };
 type Item = { id: number; name: string; sku: string; unit: string; threshold: number };
@@ -19,14 +20,16 @@ type Movement = { id: number; itemId: number; fromStationId: number | null; toSt
 type Data = { stations: Station[]; items: Item[]; stock: Stock[]; movements: Movement[] };
 type Mode = "station" | "station_edit" | "item" | "receive" | "use" | "transfer";
 const empty: Data = { stations: [], items: [], stock: [], movements: [] };
+type View = "floor" | "orders" | "inventory" | "stations" | "catalog" | "issues";
 
-export default function Inventory({ initialView = "floor" }: { initialView?: "floor" | "orders" | "inventory" | "stations" | "catalog" }) {
+export default function Inventory({ initialView = "floor" }: { initialView?: View }) {
   const [data, setData] = useState<Data>(empty);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState("all");
-  const [view, setView] = useState<"floor" | "orders" | "inventory" | "stations" | "catalog">(initialView);
+  const [view, setView] = useState<View>(initialView);
+  const [issueScreen, setIssueScreen] = useState<View>("floor");
   const [detailItem, setDetailItem] = useState<number | null>(null);
   const [itemHistory, setItemHistory] = useState<Movement[]>([]);
   const [historyMore, setHistoryMore] = useState(false);
@@ -131,6 +134,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: "fl
       <button className={`rail-link ${view === "floor" ? "active" : ""}`} onClick={() => setView("floor")}><Map size={19} /> Floor plan</button>
       <button className={`rail-link ${view === "orders" ? "active" : ""}`} onClick={() => setView("orders")}><ShoppingCart size={19} /> Orders</button>
       <button className={`rail-link ${view === "inventory" ? "active" : ""}`} onClick={() => { setSelected("all"); setView("inventory"); }}><ClipboardList size={19} /> Inventory</button>
+      <button className={`rail-link ${view === "issues" ? "active" : ""}`} onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={19} /> Issue notepad</button>
       <div className="rail-label rail-manage">MANAGE</div>
       <button className={`rail-link ${view === "stations" ? "active" : ""}`} onClick={() => setView("stations")}><Warehouse size={19} /> Workstations</button>
       <button className={`rail-link ${view === "catalog" ? "active" : ""}`} onClick={() => setView("catalog")}><Package size={19} /> Item catalog</button>
@@ -139,8 +143,9 @@ export default function Inventory({ initialView = "floor" }: { initialView?: "fl
       <div className="rail-bottom"><span className="live-dot" /> Shared inventory records</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog"})[view]}</span><span className="topbar-right">STATION CONTROL <span className="avatar">SI</span></span></header>
+      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",issues:"Issue notepad"})[view]}</span><span className="topbar-right">STATION CONTROL <span className="avatar">SI</span></span></header>
       <div className="content">
+        {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
         {view === "orders" && <Orders stations={data.stations} items={data.items} stock={data.stock} selectedStation={selected} onStationChange={setSelected} onInventoryChange={reload} />}
         {view === "stations" && <><div className="page-heading"><div><div className="eyebrow">MANAGE</div><h1>Workstations</h1><p>Define what each station does and where online orders begin.</p></div><Button onClick={() => open("station")}><Plus size={17}/> Add station</Button></div><div className="station-grid">{data.stations.map(station => <article className="station-card" key={station.id}><div className="station-card-icon"><Warehouse size={21}/></div><h2>{station.name}</h2><p>{station.action || "Station action not set"}</p>{station.location && <small>{station.location}</small>}{!!station.onlineIntake && <span className="badge badge-ok">Online intake</span>}<div className="station-card-actions"><Button size="sm" onClick={() => { setSelected(String(station.id)); setView("inventory"); }}>Inventory</Button><Button size="sm" variant="outline" onClick={() => { setSelected(String(station.id)); setView("orders"); }}>Orders</Button><Button size="sm" variant="ghost" onClick={() => editStation(station)}><Settings2 size={15}/> Edit</Button></div></article>)}</div>{!data.stations.length && <div className="empty"><strong>No stations yet</strong><p>Add a station, describe its action, then place it on the floor plan.</p><Button onClick={() => open("station")}>Add station</Button></div>}</>}
@@ -165,6 +170,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: "fl
         </>}
       </div>
     </main>
+    {view !== "issues" && <button className="issue-quick" onClick={() => { setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={18}/> Log issue</button>}
     <Sheet open={detailItem !== null} onOpenChange={v => { if (!v) setDetailItem(null); }}><SheetContent className="overflow-y-auto p-6"><SheetHeader><SheetTitle>{data.items.find(i => i.id === detailItem)?.name || "Item details"}</SheetTitle><SheetDescription>{data.items.find(i => i.id === detailItem)?.sku} · Stock by station and movement history</SheetDescription></SheetHeader><div className="item-detail"><h3>Station quantities</h3>{data.stations.map(station => <div className="detail-line" key={station.id}><strong>{station.name}</strong><span>{quantity(detailItem || 0, station.id)} {data.items.find(i => i.id === detailItem)?.unit}</span></div>)}{!data.stations.length && <p>No stations yet.</p>}<h3>Movement history</h3>{itemHistory.map(m => <div className="detail-line" key={m.id}><div><strong>{m.fromStationId ? stationName(m.fromStationId) : "Received"} → {m.toStationId ? stationName(m.toStationId) : "Used"}</strong><small>{m.note || "Stock movement"} · {new Date(m.createdAt).toLocaleString()}</small></div><span>{m.quantity}</span></div>)}{!itemHistory.length && !historyError && <p>No movements recorded for this item.</p>}{historyError && <div className="error">{historyError}</div>}{historyMore && detailItem !== null && <Button variant="outline" onClick={() => void loadHistory(detailItem, itemHistory.length)}>Load more</Button>}</div></SheetContent></Sheet>
     <Dialog open={!!mode} onOpenChange={value => { if (!value) { setMode(null); setError(""); } }}><DialogContent><DialogHeader><DialogTitle>{mode && ({ station: "Add station", station_edit: "Edit station", item: "Add item", receive: "Receive stock", use: "Record use", transfer: "Transfer stock" })[mode]}</DialogTitle><DialogDescription>{mode === "station" || mode === "station_edit" ? "Name this workstation and describe the action it performs." : mode === "item" ? "Add a catalog item to track across stations." : "Record a stock movement. Counts update immediately."}</DialogDescription></DialogHeader><form onSubmit={save} className="form">
       {(mode === "station" || mode === "station_edit") && <>{field("name", "Station name", { placeholder: "e.g. Assembly", required: true })}{field("stationAction", "Station action", { placeholder: "e.g. Assemble and inspect", required: true })}{field("location", "Location", { placeholder: "Optional" })}<label className="checkbox-field"><Checkbox checked={form.onlineIntake === "true"} onCheckedChange={checked => setForm(v => ({ ...v, onlineIntake: checked === true ? "true" : "false" }))} /><span>Start online orders at this station</span></label></>}
