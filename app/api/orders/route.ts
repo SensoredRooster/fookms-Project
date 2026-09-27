@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
     const [orders, lines] = await Promise.all([
       database.prepare("SELECT id, number, station_id AS stationId, requested_by AS requestedBy, source, contact_email AS contactEmail, contact_phone AS contactPhone, note, status, created_at AS createdAt, updated_at AS updatedAt FROM orders ORDER BY id DESC LIMIT 250").all(),
-      database.prepare("SELECT l.order_id AS orderId, l.item_id AS itemId, l.quantity, COALESCE(l.current_station_id, o.station_id) AS currentStationId, l.action_done AS actionDone, l.completed_at AS completedAt FROM order_lines l JOIN (SELECT id, station_id FROM orders ORDER BY id DESC LIMIT 250) o ON o.id = l.order_id ORDER BY l.order_id DESC").all(),
+      database.prepare("SELECT l.order_id AS orderId, l.item_id AS itemId, l.quantity, l.original_item_id AS originalItemId, l.original_quantity AS originalQuantity, COALESCE(l.current_station_id, o.station_id) AS currentStationId, l.action_done AS actionDone, l.completed_at AS completedAt FROM order_lines l JOIN (SELECT id, station_id FROM orders ORDER BY id DESC LIMIT 250) o ON o.id = l.order_id ORDER BY l.order_id DESC").all(),
     ]);
     return NextResponse.json({ orders: orders.results, lines: lines.results });
   } catch (error) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       if (!result.meta.changes) return fail("Order changed while you were working. Refresh and try again.", 409);
       return NextResponse.json({ ok: true });
     }
-    if (["mark_step", "handoff", "complete_line"].includes(String(body.action))) {
+    if (["mark_step", "handoff", "produce_handoff", "complete_line"].includes(String(body.action))) {
       const orderId = positive(body.orderId), itemId = positive(body.itemId), expectedStationId = positive(body.currentStationId);
       if (!orderId || !itemId || !expectedStationId) return fail("Choose an order item and workstation.");
       const line = await database.prepare("SELECT l.action_done AS actionDone, l.completed_at AS completedAt, COALESCE(l.current_station_id, o.station_id) AS currentStationId, o.status FROM order_lines l JOIN orders o ON o.id=l.order_id WHERE l.order_id=? AND l.item_id=?").bind(orderId, itemId).first<{ actionDone: number; completedAt: string | null; currentStationId: number; status: string }>();
@@ -65,11 +65,19 @@ export async function POST(request: Request) {
         if (line.actionDone) return fail("This station step is already recorded.", 409);
         const result = await database.prepare("UPDATE order_lines SET action_done=1 WHERE order_id=? AND item_id=? AND action_done=0 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(orderId,itemId,orderId,expectedStationId,orderId).run();
         if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
-      } else if (body.action === "handoff") {
+      } else if (body.action === "handoff" || body.action === "produce_handoff") {
         const next = positive(body.nextStationId);
         if (!line.actionDone || !next || next === expectedStationId) return fail("Complete the current station step and choose a different station.");
         if (!await database.prepare("SELECT id FROM stations WHERE id=?").bind(next).first()) return fail("Next station not found.");
-        const result = await database.prepare("UPDATE order_lines SET current_station_id=?, action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,orderId,itemId,orderId,expectedStationId,orderId).run();
+        let result;
+        if (body.action === "produce_handoff") {
+          const outputItemId = positive(body.outputItemId), outputQuantity = positive(body.outputQuantity);
+          if (!outputItemId || !outputQuantity || outputItemId === itemId) return fail("Choose a different stock item and a positive piece count.");
+          const outputItem = await database.prepare("SELECT unit FROM items WHERE id=?").bind(outputItemId).first<{ unit: string }>();
+          if (!outputItem || outputItem.unit.toLowerCase() !== "pieces") return fail("Produced stock must be a catalog item measured in pieces.");
+          if (await database.prepare("SELECT 1 FROM order_lines WHERE order_id=? AND item_id=?").bind(orderId, outputItemId).first()) return fail("This order already has a line for that stock item.");
+          result = await database.prepare("UPDATE order_lines SET current_station_id=?, item_id=?, quantity=?, original_item_id=COALESCE(original_item_id,item_id), original_quantity=COALESCE(original_quantity,quantity), action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id,(SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,outputItemId,outputQuantity,orderId,itemId,orderId,expectedStationId,orderId).run();
+        } else result = await database.prepare("UPDATE order_lines SET current_station_id=?, action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,orderId,itemId,orderId,expectedStationId,orderId).run();
         if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
       } else {
         if (!line.actionDone) return fail("Complete the station step before finishing this item.");
@@ -86,6 +94,8 @@ export async function POST(request: Request) {
     if (message.includes("Insufficient station stock") || message.includes("quantity_nonnegative")) return fail("This station does not have enough stock to fulfill the order.", 409);
     if (message.includes("Station step incomplete") || message.includes("Order is not processing")) return fail("This station step must be completed first. Refresh the order.", 409);
     if (message.includes("Invalid order status transition")) return fail("Order changed while you were working. Refresh and try again.", 409);
+    if (message.includes("Output must be pieces")) return fail("Produced stock must be measured in pieces.");
+    if (message.includes("UNIQUE constraint")) return fail("This order already contains that stock item.", 409);
     return fail("Could not save the order. Please try again.", 503);
   }
 }

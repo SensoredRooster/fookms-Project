@@ -48,11 +48,39 @@ export async function POST(request: Request) {
       const result = await database.batch(changes);
       const updated = result[result.length - 1];
       if (!updated.meta.changes) return fail("Station not found.", 404);
-    } else if (body.action === "item") {
+    } else if (body.action === "item" || body.action === "item_edit") {
       const name = clean(body.name), sku = clean(body.sku), unit = clean(body.unit) || "each";
       const threshold = Number(body.threshold);
       if (!name || !sku || name.length > 100 || sku.length > 60 || unit.length > 30 || !Number.isSafeInteger(threshold) || threshold < 0) return fail("Enter a name, SKU, and valid low stock level.");
-      await database.prepare("INSERT INTO items (name, sku, unit, threshold) VALUES (?, ?, ?, ?)").bind(name, sku, unit, threshold).run();
+      if (body.action === "item_edit") {
+        const itemId = id(body.itemId);
+        if (!itemId) return fail("Choose an item to edit.");
+        const result = await database.prepare("UPDATE items SET name=?, sku=?, unit=?, threshold=? WHERE id=?").bind(name, sku, unit, threshold, itemId).run();
+        if (!result.meta.changes) return fail("Item not found.", 404);
+      } else await database.prepare("INSERT INTO items (name, sku, unit, threshold) VALUES (?, ?, ?, ?)").bind(name, sku, unit, threshold).run();
+    } else if (body.action === "produce") {
+      const inputItemId = id(body.itemId), outputItemId = id(body.outputItemId);
+      const from = id(body.fromStationId), to = id(body.toStationId);
+      const inputQuantity = amount(body.quantity), outputQuantity = amount(body.outputQuantity), note = clean(body.note);
+      if (!inputItemId || !outputItemId || inputItemId === outputItemId || !from || !to || !inputQuantity || !outputQuantity || note.length > 200) return fail("Choose different material and stock items, stations, and positive whole number quantities.");
+      const [inputItem, outputItem, sourceStation, destinationStation, available] = await Promise.all([
+        database.prepare("SELECT id, unit FROM items WHERE id=?").bind(inputItemId).first<{ id: number; unit: string }>(),
+        database.prepare("SELECT id, unit FROM items WHERE id=?").bind(outputItemId).first<{ id: number; unit: string }>(),
+        database.prepare("SELECT id FROM stations WHERE id=?").bind(from).first(),
+        database.prepare("SELECT id FROM stations WHERE id=?").bind(to).first(),
+        database.prepare("SELECT quantity FROM stock WHERE station_id=? AND item_id=?").bind(from, inputItemId).first<{ quantity: number }>(),
+      ]);
+      if (!inputItem || !outputItem || !sourceStation || !destinationStation) return fail("An item or station no longer exists.");
+      if (outputItem.unit.toLowerCase() !== "pieces") return fail("The output stock item must use pieces as its unit. Add or edit that item in the catalog.");
+      if (!available || available.quantity < inputQuantity) return fail("There is not enough material at the source workstation.", 409);
+      const timestamp = new Date().toISOString();
+      // Both ledgers and stock rows commit together. A concurrent shortfall aborts the batch via the nonnegative constraint.
+      await database.batch([
+        database.prepare("UPDATE stock SET quantity=quantity-? WHERE station_id=? AND item_id=?").bind(inputQuantity, from, inputItemId),
+        database.prepare("INSERT INTO stock (station_id,item_id,quantity) VALUES (?,?,?) ON CONFLICT(station_id,item_id) DO UPDATE SET quantity=quantity+excluded.quantity").bind(to, outputItemId, outputQuantity),
+        database.prepare("INSERT INTO movements (item_id,from_station_id,to_station_id,quantity,note,created_at) VALUES (?,?,?,?,?,?)").bind(inputItemId, from, null, inputQuantity, `Produced ${outputQuantity} pieces at ${to}. ${note}`.trim(), timestamp),
+        database.prepare("INSERT INTO movements (item_id,from_station_id,to_station_id,quantity,note,created_at) VALUES (?,?,?,?,?,?)").bind(outputItemId, null, to, outputQuantity, `Made from ${inputQuantity} ${inputItem.unit} at ${from}. ${note}`.trim(), timestamp),
+      ]);
     } else if (body.action === "receive" || body.action === "use" || body.action === "transfer") {
       const itemId = id(body.itemId), from = id(body.fromStationId), to = id(body.toStationId), quantity = amount(body.quantity), note = clean(body.note);
       if (!itemId || !quantity || note.length > 200) return fail("Choose an item and a positive whole number quantity.");
@@ -83,6 +111,7 @@ export async function POST(request: Request) {
     console.error(error);
     const message = String(error);
     if (message.includes("UNIQUE constraint")) return fail("That station name or SKU is already in use.");
+    if (message.includes("quantity_nonnegative")) return fail("The source station no longer has enough stock. Refresh and try again.", 409);
     return fail("Could not save the change. Please try again.", 503);
   }
 }

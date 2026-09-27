@@ -43,6 +43,20 @@
       "when": 1790518835206,
       "tag": "0005_eager_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790530000000,
+      "tag": "0006_material_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790530000001,
+      "tag": "0007_production_handoff",
+      "breakpoints": true
     }
   ]
 }

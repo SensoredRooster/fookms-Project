@@ -56,6 +56,8 @@ export const orderLines = sqliteTable("order_lines", {
   orderId: integer("order_id").notNull().references(() => orders.id),
   itemId: integer("item_id").notNull().references(() => items.id),
   quantity: integer("quantity").notNull(),
+  originalItemId: integer("original_item_id").references(() => items.id),
+  originalQuantity: integer("original_quantity"),
   currentStationId: integer("current_station_id").references(() => stations.id),
   actionDone: integer("action_done").notNull().default(0),
   completedAt: text("completed_at"),
