@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     if (["mark_step", "handoff", "produce_handoff", "complete_line"].includes(String(body.action))) {
       const orderId = positive(body.orderId), itemId = positive(body.itemId), expectedStationId = positive(body.currentStationId);
       if (!orderId || !itemId || !expectedStationId) return fail("Choose an order item and workstation.");
-      const line = await database.prepare("SELECT l.action_done AS actionDone, l.completed_at AS completedAt, COALESCE(l.current_station_id, o.station_id) AS currentStationId, o.status FROM order_lines l JOIN orders o ON o.id=l.order_id WHERE l.order_id=? AND l.item_id=?").bind(orderId, itemId).first<{ actionDone: number; completedAt: string | null; currentStationId: number; status: string }>();
+      const line = await database.prepare("SELECT l.quantity, l.action_done AS actionDone, l.completed_at AS completedAt, COALESCE(l.current_station_id, o.station_id) AS currentStationId, o.status FROM order_lines l JOIN orders o ON o.id=l.order_id WHERE l.order_id=? AND l.item_id=?").bind(orderId, itemId).first<{ quantity: number; actionDone: number; completedAt: string | null; currentStationId: number; status: string }>();
       if (!line) return fail("Order item not found.", 404);
       if (line.status !== "processing" || line.completedAt || line.currentStationId !== expectedStationId) return fail("This item has changed. Refresh the order.", 409);
       if (body.action === "mark_step") {
@@ -73,16 +73,32 @@ export async function POST(request: Request) {
         const next = positive(body.nextStationId);
         if (!line.actionDone || !next || next === expectedStationId) return fail("Complete the current station step and choose a different station.");
         if (!await database.prepare("SELECT id FROM stations WHERE id=?").bind(next).first()) return fail("Next station not found.");
-        let result;
+        const available = await database.prepare("SELECT quantity FROM stock WHERE station_id=? AND item_id=?").bind(expectedStationId, itemId).first<{ quantity: number }>();
+        if (!available || available.quantity < line.quantity) return fail("This workstation does not have enough material/stock for the handoff.", 409);
+        const timestamp = new Date().toISOString();
         if (body.action === "produce_handoff") {
           const outputItemId = positive(body.outputItemId), outputQuantity = positive(body.outputQuantity);
           if (!outputItemId || !outputQuantity || outputItemId === itemId) return fail("Choose a different stock item and a positive piece count.");
           const outputItem = await database.prepare("SELECT unit FROM items WHERE id=?").bind(outputItemId).first<{ unit: string }>();
           if (!outputItem || outputItem.unit.toLowerCase() !== "pieces") return fail("Produced stock must be a catalog item measured in pieces.");
           if (await database.prepare("SELECT 1 FROM order_lines WHERE order_id=? AND item_id=?").bind(orderId, outputItemId).first()) return fail("This order already has a line for that stock item.");
-          result = await database.prepare("UPDATE order_lines SET current_station_id=?, item_id=?, quantity=?, original_item_id=COALESCE(original_item_id,item_id), original_quantity=COALESCE(original_quantity,quantity), action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id,(SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,outputItemId,outputQuantity,orderId,itemId,orderId,expectedStationId,orderId).run();
-        } else result = await database.prepare("UPDATE order_lines SET current_station_id=?, action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,orderId,itemId,orderId,expectedStationId,orderId).run();
-        if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
+          const results = await database.batch([
+            database.prepare("UPDATE stock SET quantity=quantity-? WHERE station_id=? AND item_id=?").bind(line.quantity, expectedStationId, itemId),
+            database.prepare("INSERT INTO stock (station_id,item_id,quantity) VALUES (?,?,?) ON CONFLICT(station_id,item_id) DO UPDATE SET quantity=quantity+excluded.quantity").bind(next, outputItemId, outputQuantity),
+            database.prepare("INSERT INTO movements (item_id,from_station_id,to_station_id,quantity,note,created_at,order_id) VALUES (?,?,?,?,?,?,?)").bind(itemId, expectedStationId, null, line.quantity, `Order ${orderId}: material consumed to produce ${outputQuantity} pieces`, timestamp, orderId),
+            database.prepare("INSERT INTO movements (item_id,from_station_id,to_station_id,quantity,note,created_at,order_id) VALUES (?,?,?,?,?,?,?)").bind(outputItemId, null, next, outputQuantity, `Order ${orderId}: finished stock produced from item ${itemId}`, timestamp, orderId),
+            database.prepare("UPDATE order_lines SET current_station_id=?, item_id=?, quantity=?, original_item_id=COALESCE(original_item_id,item_id), original_quantity=COALESCE(original_quantity,quantity), action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id,(SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,outputItemId,outputQuantity,orderId,itemId,orderId,expectedStationId,orderId),
+          ]);
+          if (!results[4].meta.changes) return fail("Item changed. Refresh the order.",409);
+        } else {
+          const results = await database.batch([
+            database.prepare("UPDATE stock SET quantity=quantity-? WHERE station_id=? AND item_id=?").bind(line.quantity, expectedStationId, itemId),
+            database.prepare("INSERT INTO stock (station_id,item_id,quantity) VALUES (?,?,?) ON CONFLICT(station_id,item_id) DO UPDATE SET quantity=quantity+excluded.quantity").bind(next, itemId, line.quantity),
+            database.prepare("INSERT INTO movements (item_id,from_station_id,to_station_id,quantity,note,created_at,order_id) VALUES (?,?,?,?,?,?,?)").bind(itemId, expectedStationId, next, line.quantity, `Order ${orderId}: workstation handoff`, timestamp, orderId),
+            database.prepare("UPDATE order_lines SET current_station_id=?, action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(next,orderId,itemId,orderId,expectedStationId,orderId),
+          ]);
+          if (!results[3].meta.changes) return fail("Item changed. Refresh the order.",409);
+        }
       } else {
         if (!line.actionDone) return fail("Complete the station step before finishing this item.");
         const result = await database.prepare("UPDATE order_lines SET completed_at=? WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(new Date().toISOString(),orderId,itemId,orderId,expectedStationId,orderId).run();
