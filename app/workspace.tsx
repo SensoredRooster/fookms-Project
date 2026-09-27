@@ -38,6 +38,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
   const [mode, setMode] = useState<Mode | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [openIssueCount, setOpenIssueCount] = useState(0);
 
   const reload = useCallback(async () => {
     try {
@@ -50,6 +51,24 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
+  const loadIssueCount = useCallback(async () => {
+    try {
+      const response = await fetch("/api/issues", { cache: "no-store" });
+      if (!response.ok) return;
+      const result = await response.json() as { issues?: { status: string }[] };
+      setOpenIssueCount((result.issues || []).filter(issue => issue.status === "open").length);
+    } catch { /* keep the last known count if notes are temporarily unavailable */ }
+  }, []);
+  useEffect(() => {
+    void loadIssueCount();
+    const timer = window.setInterval(() => void loadIssueCount(), 30000);
+    const changed = () => void loadIssueCount();
+    window.addEventListener("station-issues-changed", changed);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("station-issues-changed", changed);
+    };
+  }, [loadIssueCount]);
   const loadHistory = useCallback(async (itemId: number, offset: number) => {
     try {
       const response = await fetch(`/api/inventory/history?itemId=${itemId}&offset=${offset}`, { cache: "no-store" });
@@ -136,7 +155,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <button className={`rail-link ${view === "floor" ? "active" : ""}`} onClick={() => setView("floor")}><Map size={19} /> Floor plan</button>
       <button className={`rail-link ${view === "orders" ? "active" : ""}`} onClick={() => setView("orders")}><ShoppingCart size={19} /> Orders</button>
       <button className={`rail-link ${view === "inventory" ? "active" : ""}`} onClick={() => { setSelected("all"); setView("inventory"); }}><ClipboardList size={19} /> Inventory</button>
-      <button className={`rail-link ${view === "issues" ? "active" : ""}`} onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={19} /> Issue notepad</button>
+      <button className={`rail-link ${view === "issues" ? "active" : ""}`} onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={19} /> Issue notepad {openIssueCount > 0 && <span className="badge badge-low" aria-label={`${openIssueCount} open notes`}>{openIssueCount}</span>}</button>
       <div className="rail-label rail-manage">MANAGE</div>
       <button className={`rail-link ${view === "stations" ? "active" : ""}`} onClick={() => setView("stations")}><Warehouse size={19} /> Workstations</button>
       <button className={`rail-link ${view === "catalog" ? "active" : ""}`} onClick={() => setView("catalog")}><Package size={19} /> Item catalog</button>
@@ -145,7 +164,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <div className="rail-bottom"><span className="live-dot" /> Shared inventory records</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",issues:"Issue notepad"})[view]}</span><span className="topbar-right">STATION CONTROL <span className="avatar">SI</span></span></header>
+      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
       <div className="content">
         {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
@@ -172,7 +191,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
         </>}
       </div>
     </main>
-    {view !== "issues" && <button className="issue-quick" onClick={() => { setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={18}/> Log issue</button>}
+    {view !== "issues" && <button className="issue-quick" onClick={() => { setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={18}/> {openIssueCount > 0 ? `Notes (${openIssueCount})` : "Log issue"}</button>}
     <Sheet open={detailItem !== null} onOpenChange={v => { if (!v) setDetailItem(null); }}><SheetContent className="overflow-y-auto p-6"><SheetHeader><SheetTitle>{data.items.find(i => i.id === detailItem)?.name || "Item details"}</SheetTitle><SheetDescription>{data.items.find(i => i.id === detailItem)?.sku} · Stock by station and movement history</SheetDescription></SheetHeader><div className="item-detail"><h3>Station quantities</h3>{data.stations.map(station => <div className="detail-line" key={station.id}><strong>{station.name}</strong><span>{quantity(detailItem || 0, station.id)} {data.items.find(i => i.id === detailItem)?.unit}</span></div>)}{!data.stations.length && <p>No stations yet.</p>}<h3>Movement history</h3>{itemHistory.map(m => <div className="detail-line" key={m.id}><div><strong>{m.fromStationId ? stationName(m.fromStationId) : "Received"} → {m.toStationId ? stationName(m.toStationId) : "Used"}</strong><small>{m.note || "Stock movement"} · {new Date(m.createdAt).toLocaleString()}</small></div><span>{m.quantity} {unitFor(m.itemId)}</span></div>)}{!itemHistory.length && !historyError && <p>No movements recorded for this item.</p>}{historyError && <div className="error">{historyError}</div>}{historyMore && detailItem !== null && <Button variant="outline" onClick={() => void loadHistory(detailItem, itemHistory.length)}>Load more</Button>}</div></SheetContent></Sheet>
     <Dialog open={!!mode} onOpenChange={value => { if (!value) { setMode(null); setError(""); } }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{mode && ({ station: "Add station", station_edit: "Edit station", item: "Add item", item_edit: "Edit item", receive: "Receive stock", use: "Record use", transfer: "Transfer stock", produce: "Finish work → stock" })[mode]}</DialogTitle><DialogDescription>{mode === "station" || mode === "station_edit" ? "Name this workstation and describe the action it performs." : mode === "item" || mode === "item_edit" ? "Set the item unit for every inventory count." : mode === "produce" ? "Consume material at the current workstation and count finished stock in pieces at the next one." : mode === "transfer" ? "Move the same item and unit. The overall total stays the same." : "Record a stock movement. Counts update immediately."}</DialogDescription></DialogHeader><form onSubmit={save} className="form">
       {(mode === "station" || mode === "station_edit") && <>{field("name", "Station name", { placeholder: "e.g. Assembly", required: true })}{field("stationAction", "Station action", { placeholder: "e.g. Assemble and inspect", required: true })}{field("location", "Location", { placeholder: "Optional" })}<label className="checkbox-field"><Checkbox checked={form.onlineIntake === "true"} onCheckedChange={checked => setForm(v => ({ ...v, onlineIntake: checked === true ? "true" : "false" }))} /><span>Start online orders at this station</span></label></>}
