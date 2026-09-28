@@ -12,6 +12,64 @@ const fail = (message: string, status = 400) => NextResponse.json({ error: messa
 const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
 const clean = (value: unknown) => String(value ?? "").trim();
 
+async function ensureHandoffTriggers(database: D1Database) {
+  const names = await database.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name IN ('station_handoff','station_production_handoff')").all<{ name: string }>();
+  const existing = new Set(names.results.map(row => row.name));
+
+  if (!existing.has("station_handoff")) {
+    await database.prepare(`
+      CREATE TRIGGER station_handoff AFTER UPDATE OF current_station_id ON order_lines
+      WHEN NEW.current_station_id IS NOT NULL
+        AND NEW.current_station_id != COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id))
+        AND NEW.item_id=OLD.item_id
+        AND NEW.quantity=OLD.quantity
+      BEGIN
+        SELECT RAISE(ABORT, 'Station step incomplete')
+        WHERE OLD.action_done != 1 OR NEW.action_done != 0 OR OLD.completed_at IS NOT NULL
+          OR (SELECT status FROM orders WHERE id=NEW.order_id) != 'processing';
+        SELECT RAISE(ABORT, 'Insufficient station stock')
+        WHERE COALESCE((SELECT quantity FROM stock WHERE station_id=COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)) AND item_id=NEW.item_id), 0) < NEW.quantity;
+        UPDATE stock SET quantity=quantity-NEW.quantity
+        WHERE station_id=COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)) AND item_id=NEW.item_id;
+        INSERT INTO stock(station_id,item_id,quantity) VALUES(NEW.current_station_id, NEW.item_id, NEW.quantity)
+        ON CONFLICT(station_id,item_id) DO UPDATE SET quantity=quantity+excluded.quantity;
+        INSERT INTO movements(item_id,from_station_id,to_station_id,quantity,note,created_at,order_id)
+        VALUES(NEW.item_id, COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)), NEW.current_station_id, NEW.quantity, 'Order '||(SELECT number FROM orders WHERE id=NEW.order_id), strftime('%Y-%m-%dT%H:%M:%fZ','now'), NEW.order_id);
+        INSERT INTO order_line_events(order_id,item_id,type,from_station_id,to_station_id,created_at)
+        VALUES(NEW.order_id,NEW.item_id,'handoff',COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)),NEW.current_station_id,strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+      END
+    `).run();
+  }
+
+  if (!existing.has("station_production_handoff")) {
+    await database.prepare(`
+      CREATE TRIGGER station_production_handoff AFTER UPDATE OF current_station_id ON order_lines
+      WHEN NEW.current_station_id IS NOT NULL
+        AND NEW.current_station_id != COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id))
+        AND NEW.item_id != OLD.item_id
+      BEGIN
+        SELECT RAISE(ABORT, 'Station step incomplete')
+        WHERE OLD.action_done != 1 OR NEW.action_done != 0 OR OLD.completed_at IS NOT NULL
+          OR (SELECT status FROM orders WHERE id=NEW.order_id) != 'processing';
+        SELECT RAISE(ABORT, 'Output must be pieces')
+        WHERE LOWER((SELECT unit FROM items WHERE id=NEW.item_id)) != 'pieces';
+        SELECT RAISE(ABORT, 'Insufficient station stock')
+        WHERE COALESCE((SELECT quantity FROM stock WHERE station_id=COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)) AND item_id=OLD.item_id), 0) < OLD.quantity;
+        UPDATE stock SET quantity=quantity-OLD.quantity
+        WHERE station_id=COALESCE(OLD.current_station_id, (SELECT station_id FROM orders WHERE id=OLD.order_id)) AND item_id=OLD.item_id;
+        INSERT INTO stock(station_id,item_id,quantity) VALUES(NEW.current_station_id,NEW.item_id,NEW.quantity)
+        ON CONFLICT(station_id,item_id) DO UPDATE SET quantity=quantity+excluded.quantity;
+        INSERT INTO movements(item_id,from_station_id,to_station_id,quantity,note,created_at,order_id)
+        VALUES(OLD.item_id,COALESCE(OLD.current_station_id,(SELECT station_id FROM orders WHERE id=OLD.order_id)),NULL,OLD.quantity,'Order '||(SELECT number FROM orders WHERE id=OLD.order_id)||' — material used',strftime('%Y-%m-%dT%H:%M:%fZ','now'),OLD.order_id);
+        INSERT INTO movements(item_id,from_station_id,to_station_id,quantity,note,created_at,order_id)
+        VALUES(NEW.item_id,NULL,NEW.current_station_id,NEW.quantity,'Order '||(SELECT number FROM orders WHERE id=NEW.order_id)||' — pieces produced',strftime('%Y-%m-%dT%H:%M:%fZ','now'),NEW.order_id);
+        INSERT INTO order_line_events(order_id,item_id,type,from_station_id,to_station_id,created_at)
+        VALUES(NEW.order_id,OLD.item_id,'produced',COALESCE(OLD.current_station_id,(SELECT station_id FROM orders WHERE id=OLD.order_id)),NEW.current_station_id,strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+      END
+    `).run();
+  }
+}
+
 export async function GET(request: Request) {
   try {
     if (!await isStaff()) return fail("Staff access required.", 403);
@@ -70,6 +128,7 @@ export async function POST(request: Request) {
         const result = await database.prepare("UPDATE order_lines SET action_done=1 WHERE order_id=? AND item_id=? AND action_done=0 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(orderId,itemId,orderId,expectedStationId,orderId).run();
         if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
       } else if (body.action === "handoff" || body.action === "produce_handoff") {
+        await ensureHandoffTriggers(database);
         const next = positive(body.nextStationId);
         if (!line.actionDone || !next || next === expectedStationId) return fail("Complete the current station step and choose a different station.");
         if (!await database.prepare("SELECT id FROM stations WHERE id=?").bind(next).first()) return fail("Next station not found.");
@@ -90,7 +149,8 @@ export async function POST(request: Request) {
           const result = await database.prepare("UPDATE order_lines SET current_station_id=?, action_done=0 WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'")
             .bind(next,orderId,itemId,orderId,expectedStationId,orderId).run();
           if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
-        }      } else {
+        }
+      } else {
         if (!line.actionDone) return fail("Complete the station step before finishing this item.");
         const result = await database.prepare("UPDATE order_lines SET completed_at=? WHERE order_id=? AND item_id=? AND action_done=1 AND completed_at IS NULL AND COALESCE(current_station_id, (SELECT station_id FROM orders WHERE id=?))=? AND (SELECT status FROM orders WHERE id=?)='processing'").bind(new Date().toISOString(),orderId,itemId,orderId,expectedStationId,orderId).run();
         if (!result.meta.changes) return fail("Item changed. Refresh the order.",409);
