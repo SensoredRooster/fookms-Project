@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Customer } from "./customers";
 
 type Station = { id: number; name: string; action: string; onlineIntake: number };
 type Item = { id: number; name: string; sku: string; unit: string };
 type Stock = { itemId: number; stationId: number; quantity: number };
-type Order = { id: number; number: string; stationId: number; requestedBy: string; purchaseOrderNumber: string; source: string; contactEmail: string; contactPhone: string; note: string; status: string; createdAt: string; updatedAt: string };
+type Order = { id: number; number: string; stationId: number; customerId: number | null; requestedBy: string; purchaseOrderNumber: string; source: string; contactEmail: string; contactPhone: string; note: string; status: string; createdAt: string; updatedAt: string };
 type Line = { orderId: number; itemId: number; quantity: number; cutLengthInches: number | null; originalItemId: number | null; originalQuantity: number | null; currentStationId: number; actionDone: number; completedAt: string | null };
 type Event = { id: number; orderId: number; itemId: number; type: string; fromStationId: number | null; toStationId: number | null; createdAt: string };
 type OrderData = { orders: Order[]; lines: Line[] };
@@ -27,6 +28,8 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
   const [detail, setDetail] = useState<number | null>(null);
   const [detailEvents, setDetailEvents] = useState<Event[]>([]);
   const [stationId, setStationId] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
   const [source, setSource] = useState<"phone" | "walk_in" | "online">("phone");
@@ -53,6 +56,17 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 15000);
     return () => window.clearInterval(timer);
   }, [load]);
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const response = await fetch("/api/customers", { cache: "no-store" });
+        if (!response.ok) return;
+        const result = await response.json() as { customers?: Customer[] };
+        setCustomers(result.customers || []);
+      } catch { /* ordering still works without saved customer lookup */ }
+    };
+    void loadCustomers();
+  }, []);
   const loadEvents = useCallback(async (orderId: number) => {
     try {
       const response = await fetch(`/api/orders?orderId=${orderId}`, { cache: "no-store" });
@@ -72,11 +86,11 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
   const date = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   function start() {
     setStationId(selectedStation === "all" ? "" : selectedStation);
-    setEditingId(null); setEditingUpdatedAt(""); setRequestedBy(""); setPurchaseOrderNumber(""); setSource("phone"); setContactEmail(""); setContactPhone(""); setNote(""); setLines([{ itemId: "", quantity: "1", cutLengthInches: "" }]); setError(""); setNotice(""); setCreating(true);
+    setEditingId(null); setEditingUpdatedAt(""); setCustomerId(""); setRequestedBy(""); setPurchaseOrderNumber(""); setSource("phone"); setContactEmail(""); setContactPhone(""); setNote(""); setLines([{ itemId: "", quantity: "1", cutLengthInches: "" }]); setError(""); setNotice(""); setCreating(true);
   }
   function edit(order: Order) {
     setDetail(null); setEditingId(order.id); setEditingUpdatedAt(order.updatedAt);
-    setStationId(String(order.stationId)); setRequestedBy(order.requestedBy); setPurchaseOrderNumber(order.purchaseOrderNumber);
+    setStationId(String(order.stationId)); setCustomerId(order.customerId ? String(order.customerId) : ""); setRequestedBy(order.requestedBy); setPurchaseOrderNumber(order.purchaseOrderNumber);
     setSource(order.source as "phone" | "walk_in" | "online"); setContactEmail(order.contactEmail); setContactPhone(order.contactPhone); setNote(order.note);
     setLines(data.lines.filter(l => l.orderId === order.id).map(l => ({ itemId: String(l.itemId), quantity: String(l.quantity), cutLengthInches: l.cutLengthInches == null ? "" : String(l.cutLengthInches) })));
     setError(""); setNotice(""); setCreating(true);
@@ -87,7 +101,7 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
     if (!stationId || !lines.length || lines.some(l => !l.itemId || !Number.isSafeInteger(Number(l.quantity)) || Number(l.quantity) < 1 || (l.cutLengthInches !== "" && (!Number.isFinite(Number(l.cutLengthInches)) || Number(l.cutLengthInches) <= 0))) || new Set(lines.map(l => l.itemId)).size !== lines.length) { setError("Choose a station and unique items with positive quantities."); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: editingId ? "update" : "create", orderId: editingId, expectedUpdatedAt: editingUpdatedAt, source, stationId, requestedBy, purchaseOrderNumber, contactEmail, contactPhone, note, lines }) });
+      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: editingId ? "update" : "create", orderId: editingId, expectedUpdatedAt: editingUpdatedAt, source, stationId, customerId: customerId || null, requestedBy, purchaseOrderNumber, contactEmail, contactPhone, note, lines }) });
       const result = await response.json() as { error?: string; number?: string };
       if (!response.ok) throw new Error(result.error || "Could not create order.");
       setCreating(false); setNotice(editingId ? `Order ${result.number} updated` : `Order ${result.number} created`); await load(); if (editingId) { setDetail(editingId); await loadEvents(editingId); }
@@ -140,6 +154,17 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
     <Dialog open={creating} onOpenChange={v => { if (!v) { setCreating(false); setError(""); } }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editingId ? "Edit order" : "Enter an order"}</DialogTitle><DialogDescription>{editingId ? "Update the order before a workstation begins work." : "Record a phone or walk in request and choose its first workstation."}</DialogDescription></DialogHeader><form className="form" onSubmit={create}>
       <label className="field"><span>Order source</span><Select disabled={!!editingId} value={source} onValueChange={v => setSource(v as "phone" | "walk_in" | "online")}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="phone">Phone call</SelectItem><SelectItem value="walk_in">Walk in</SelectItem>{editingId && <SelectItem value="online">Online</SelectItem>}</SelectContent></Select></label>
       <label className="field"><span>First workstation</span><Select value={stationId} onValueChange={setStationId}><SelectTrigger className="w-full"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent>{stations.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select></label>
+      <label className="field"><span>Saved customer</span><Select value={customerId || "none"} onValueChange={value => {
+        if (value === "none") { setCustomerId(""); return; }
+        setCustomerId(value);
+        const customer = customers.find(c => String(c.id) === value);
+        if (customer) {
+          setRequestedBy(customer.customerName);
+          setContactEmail(customer.email);
+          setContactPhone(customer.contactPhone);
+          setNote(old => old || customer.comments);
+        }
+      }}><SelectTrigger className="w-full"><SelectValue placeholder="Choose saved customer" /></SelectTrigger><SelectContent><SelectItem value="none">No saved customer</SelectItem>{customers.map(customer => <SelectItem key={customer.id} value={String(customer.id)}>{customer.customerName}{customer.contactName ? ` · ${customer.contactName}` : ""}</SelectItem>)}</SelectContent></Select><small>Selecting a customer fills the order contact information. Customer and shipping addresses stay saved in Customers for future orders and sales.</small></label>
       <label className="field"><span>Customer or requester *</span><Input required value={requestedBy} onChange={e => setRequestedBy(e.target.value)} placeholder="Name or department" maxLength={100} /></label>
       <label className="field"><span>Purchase order number</span><Input maxLength={80} value={purchaseOrderNumber} onChange={e => setPurchaseOrderNumber(e.target.value)} placeholder="PO number, if supplied" /></label>
       <div className="form-grid"><label className="field"><span>Email</span><Input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={150} /></label><label className="field"><span>Phone</span><Input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} maxLength={40} /></label></div>
@@ -149,7 +174,7 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
       {error && <div className="error" role="alert">{error}</div>}<div className="form-actions"><Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : editingId ? "Save order" : "Create order"}</Button></div>
     </form></DialogContent></Dialog>
     <Dialog open={!!detail} onOpenChange={v => { if (!v) { setDetail(null); setError(""); } }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{active?.number || "Order details"}</DialogTitle><DialogDescription>{active && `Started at ${station(active.stationId)} · Created ${date(active.createdAt)}`}</DialogDescription></DialogHeader>{active && <div className="order-detail">
-      <div className="detail-meta"><span>Status <strong className={`badge badge-${active.status}`}>{active.status}</strong></span><span>Source <strong className="capitalize">{active.source.replace("_", " ")}</strong></span><span>Requested by <strong>{active.requestedBy || "—"}</strong></span><span>PO number <strong>{active.purchaseOrderNumber || "—"}</strong></span>{active.contactEmail && <span>Email <strong>{active.contactEmail}</strong></span>}{active.contactPhone && <span>Phone <strong>{active.contactPhone}</strong></span>}</div>
+      <div className="detail-meta"><span>Status <strong className={`badge badge-${active.status}`}>{active.status}</strong></span><span>Source <strong className="capitalize">{active.source.replace("_", " ")}</strong></span>{active.customerId && <span>Saved customer <strong>{customers.find(c => c.id === active.customerId)?.customerName || active.requestedBy}</strong></span>}<span>Requested by <strong>{active.requestedBy || "—"}</strong></span><span>PO number <strong>{active.purchaseOrderNumber || "—"}</strong></span>{active.contactEmail && <span>Email <strong>{active.contactEmail}</strong></span>}{active.contactPhone && <span>Phone <strong>{active.contactPhone}</strong></span>}</div>
       <div className="workflow-lines">{activeLines.map(l => <div key={l.itemId} className="workflow-card"><div className="workflow-card-top"><div><strong>{item(l.itemId)?.name}</strong><small>{item(l.itemId)?.sku} · Current quantity {l.quantity} {item(l.itemId)?.unit}</small>{l.cutLengthInches != null && <small>Cut length: {l.cutLengthInches} in</small>}{l.originalItemId && <small>Ordered as {l.originalQuantity} {item(l.originalItemId)?.unit} {item(l.originalItemId)?.name}</small>}</div><span className={`badge ${l.completedAt ? "badge-fulfilled" : l.actionDone ? "badge-processing" : "badge-received"}`}>{l.completedAt ? "Finished" : l.actionDone ? "Step done" : "At station"}</span></div><div className="workflow-station"><span>Current workstation</span><strong>{station(l.currentStationId)}</strong><small>{stationAction(l.currentStationId)}</small><small>Stock here: {stockAt(l.itemId, l.currentStationId)} {item(l.itemId)?.unit}</small></div>{active.status === "processing" && !l.completedAt && <div className="workflow-actions">{!l.actionDone ? <Button disabled={busy} onClick={() => void lineAction("mark_step", l)}>Mark station step done</Button> : <><Select value={nextStations[l.itemId] || ""} onValueChange={v => setNextStations(old => ({ ...old, [l.itemId]: v }))}><SelectTrigger aria-label={`Next workstation for ${item(l.itemId)?.name}`} className="min-w-[150px]"><SelectValue placeholder="Next workstation" /></SelectTrigger><SelectContent>{stations.filter(s => s.id !== l.currentStationId).map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={busy || !nextStations[l.itemId] || stockAt(l.itemId, l.currentStationId) < l.quantity} onClick={() => void lineAction("handoff", l)}>Pass same item on</Button><div className="field"><span>Or produce piece stock</span><Select value={outputs[l.itemId] || ""} onValueChange={v => setOutputs(old => ({ ...old, [l.itemId]: v }))}><SelectTrigger aria-label="Produced stock item"><SelectValue placeholder="Select stock item" /></SelectTrigger><SelectContent>{items.filter(i => i.id !== l.itemId && i.unit.toLowerCase() === "pieces").map(i => <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>)}</SelectContent></Select><Input type="number" min={1} aria-label="Pieces produced" placeholder="Pieces produced" value={pieceCounts[l.itemId] || ""} onChange={e => setPieceCounts(old => ({ ...old, [l.itemId]: e.target.value }))} /><Button disabled={busy || !nextStations[l.itemId] || !outputs[l.itemId] || !pieceCounts[l.itemId] || stockAt(l.itemId, l.currentStationId) < l.quantity} onClick={() => void lineAction("produce_handoff", l)}>Consume {l.quantity} {item(l.itemId)?.unit} and pass pieces</Button></div><Button disabled={busy || stockAt(l.itemId, l.currentStationId) < l.quantity} onClick={() => void lineAction("complete_line", l)}>Finish item</Button></>}{stockAt(l.itemId, l.currentStationId) < l.quantity && <small className="stock-warning">Receive stock at this station before passing or finishing this item.</small>}</div>}<div className="workflow-history"><span>ITEM HISTORY</span><small>Started at {station(active.stationId)}</small>{detailEvents.filter(e => e.itemId === l.itemId || e.itemId === l.originalItemId).map(e => <small key={e.id}>{e.type === "step_done" ? `Step done at ${station(e.fromStationId || 0)}` : e.type === "produced" ? `Produced pieces at ${station(e.toStationId || 0)} from ${station(e.fromStationId || 0)}` : e.type === "handoff" ? `Passed from ${station(e.fromStationId || 0)} to ${station(e.toStationId || 0)}` : `Finished at ${station(e.fromStationId || 0)}`} · {date(e.createdAt)}</small>)}</div></div>)}</div>
       {active.note && <p className="order-note">{active.note}</p>}
       {error && <div className="error" role="alert">{error}</div>}
