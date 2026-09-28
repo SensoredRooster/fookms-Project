@@ -38,10 +38,31 @@ export const movements = sqliteTable("movements", {
   orderId: integer("order_id"),
 });
 
+export const customers = sqliteTable("customers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  customerName: text("customer_name").notNull(),
+  customerAddress: text("customer_address").notNull().default(""),
+  customerCity: text("customer_city").notNull().default(""),
+  customerState: text("customer_state").notNull().default(""),
+  customerZip: text("customer_zip").notNull().default(""),
+  shipTo: text("ship_to").notNull().default(""),
+  shipToAddress: text("ship_to_address").notNull().default(""),
+  shipToCity: text("ship_to_city").notNull().default(""),
+  shipToState: text("ship_to_state").notNull().default(""),
+  shipToZip: text("ship_to_zip").notNull().default(""),
+  contactName: text("contact_name").notNull().default(""),
+  contactPhone: text("contact_phone").notNull().default(""),
+  email: text("email").notNull().default(""),
+  comments: text("comments").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const orders = sqliteTable("orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   number: text("number").notNull().unique(),
   stationId: integer("station_id").notNull().references(() => stations.id),
+  customerId: integer("customer_id").references(() => customers.id),
   requestedBy: text("requested_by").notNull().default(""),
   purchaseOrderNumber: text("purchase_order_number").notNull().default(""),
   source: text("source").notNull().default("staff"),
