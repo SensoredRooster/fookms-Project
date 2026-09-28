@@ -40,6 +40,8 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [openIssueCount, setOpenIssueCount] = useState(0);
+  const [issueAlert, setIssueAlert] = useState("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -52,24 +54,58 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
-  const loadIssueCount = useCallback(async () => {
+  const loadIssueCount = useCallback(async (announce = true) => {
     try {
       const response = await fetch("/api/issues", { cache: "no-store" });
       if (!response.ok) return;
-      const result = await response.json() as { issues?: { status: string }[] };
-      setOpenIssueCount((result.issues || []).filter(issue => issue.status === "open").length);
+      const result = await response.json() as { issues?: { id: number; status: string; title: string; reporterEmail: string; createdAt: string }[] };
+      const issues = result.issues || [];
+      setOpenIssueCount(issues.filter(issue => issue.status === "open").length);
+
+      const newest = issues.reduce<typeof issues[number] | null>((latest, issue) => !latest || issue.id > latest.id ? issue : latest, null);
+      if (!newest) return;
+
+      const key = "station-last-seen-issue-id";
+      const previous = Number(window.localStorage.getItem(key) || "0");
+      if (!previous) {
+        window.localStorage.setItem(key, String(newest.id));
+        return;
+      }
+      if (newest.id > previous) {
+        window.localStorage.setItem(key, String(newest.id));
+        if (announce) {
+          const message = `New note #${newest.id}: ${newest.title}`;
+          setIssueAlert(message);
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Station Inventory: New note", {
+              body: `${newest.title} — ${newest.reporterEmail}`,
+              tag: `station-note-${newest.id}`,
+            });
+          }
+        }
+      }
     } catch { /* keep the last known count if notes are temporarily unavailable */ }
   }, []);
   useEffect(() => {
-    void loadIssueCount();
-    const timer = window.setInterval(() => void loadIssueCount(), 30000);
-    const changed = () => void loadIssueCount();
+    if ("Notification" in window) setNotificationsEnabled(Notification.permission === "granted");
+    void loadIssueCount(false);
+    const timer = window.setInterval(() => void loadIssueCount(true), 15000);
+    const changed = () => void loadIssueCount(true);
     window.addEventListener("station-issues-changed", changed);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("station-issues-changed", changed);
     };
   }, [loadIssueCount]);
+  const enableNoteAlerts = useCallback(async () => {
+    if (!("Notification" in window)) {
+      setIssueAlert("Browser notifications are not supported here. New-note alerts will still appear inside the app.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationsEnabled(permission === "granted");
+    setIssueAlert(permission === "granted" ? "Browser note alerts enabled." : "Browser notification permission was not enabled. In-app alerts will still work.");
+  }, []);
   const loadHistory = useCallback(async (itemId: number, offset: number) => {
     try {
       const response = await fetch(`/api/inventory/history?itemId=${itemId}&offset=${offset}`, { cache: "no-store" });
@@ -166,8 +202,9 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <div className="rail-bottom"><span className="live-dot" /> Shared inventory records</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",customers:"Customers",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
+      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",customers:"Customers",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{!notificationsEnabled && <button className="badge" onClick={() => void enableNoteAlerts()}>Enable note alerts</button>}{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
       <div className="content">
+        {issueAlert && <div className="notice" role="alert"><strong>{issueAlert}</strong> <button onClick={() => { setIssueAlert(""); if (view !== "issues") setIssueScreen(view); setView("issues"); }}>View notes</button> <button onClick={() => setIssueAlert("")}>Dismiss</button></div>}
         {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
         {view === "customers" && <Customers />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
