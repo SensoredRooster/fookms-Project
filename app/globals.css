@@ -133,6 +133,19 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .station-card p { color:#657982; font-size:14px; margin:0; line-height:1.5 }
 .station-card small { color:#82949b }
 .station-card-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; padding-top:18px }
+.all-stations-inventory { display:grid; gap:16px; margin-bottom:20px }
+.all-stations-header { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap }
+.all-stations-header h2 { margin:0 0 5px; font-size:20px }
+.all-stations-header p { margin:0; color:#70818a; font-size:14px }
+.station-inventory-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:16px }
+.station-inventory-panel { background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 3px 13px #1d3a4508 }
+.station-inventory-head { padding:16px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:12px }
+.station-inventory-head > div { display:flex; align-items:center; gap:10px; min-width:0 }
+.station-inventory-head svg { color:#378d84; flex:none }
+.station-inventory-head h3 { margin:0; font-size:16px }
+.station-inventory-head p { margin:3px 0 0; color:#7b8d95; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.station-inventory-empty { padding:24px 18px; color:#788b94; font-size:13px }
+@media(max-width:740px) { .station-inventory-grid { grid-template-columns:1fr }.all-stations-header { align-items:stretch; flex-direction:column }.all-stations-header .table-actions { width:100% } }
 /* Editable floor */
 .floor-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start }
 .floor-main-panel,.floor-inspector { background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 3px 13px #1d3a4508 }
