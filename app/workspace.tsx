@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2 } from "lucide-react";
+import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Orders from "./orders";
 import FloorPlan from "./floor-plan";
 import IssueNotepad from "./issue-notepad";
+import Customers from "./customers";
 
 type Station = { id: number; name: string; location: string; action: string; onlineIntake: number };
 type Item = { id: number; name: string; sku: string; unit: string; threshold: number };
@@ -20,7 +21,7 @@ type Movement = { id: number; itemId: number; fromStationId: number | null; toSt
 type Data = { stations: Station[]; items: Item[]; stock: Stock[]; movements: Movement[] };
 type Mode = "station" | "station_edit" | "item" | "item_edit" | "receive" | "use" | "transfer" | "produce";
 const empty: Data = { stations: [], items: [], stock: [], movements: [] };
-type View = "floor" | "orders" | "inventory" | "stations" | "catalog" | "issues";
+type View = "floor" | "orders" | "inventory" | "stations" | "catalog" | "customers" | "issues";
 
 export default function Inventory({ initialView = "floor" }: { initialView?: View }) {
   const [data, setData] = useState<Data>(empty);
@@ -155,6 +156,7 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <button className={`rail-link ${view === "floor" ? "active" : ""}`} onClick={() => setView("floor")}><Map size={19} /> Floor plan</button>
       <button className={`rail-link ${view === "orders" ? "active" : ""}`} onClick={() => setView("orders")}><ShoppingCart size={19} /> Orders</button>
       <button className={`rail-link ${view === "inventory" ? "active" : ""}`} onClick={() => { setSelected("all"); setView("inventory"); }}><ClipboardList size={19} /> Inventory</button>
+      <button className={`rail-link ${view === "customers" ? "active" : ""}`} onClick={() => setView("customers")}><Users size={19} /> Customers</button>
       <button className={`rail-link ${view === "issues" ? "active" : ""}`} onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><ClipboardPenLine size={19} /> Issue notepad {openIssueCount > 0 && <span className="badge badge-low" aria-label={`${openIssueCount} open notes`}>{openIssueCount}</span>}</button>
       <div className="rail-label rail-manage">MANAGE</div>
       <button className={`rail-link ${view === "stations" ? "active" : ""}`} onClick={() => setView("stations")}><Warehouse size={19} /> Workstations</button>
@@ -164,9 +166,10 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <div className="rail-bottom"><span className="live-dot" /> Shared inventory records</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
+      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",customers:"Customers",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
       <div className="content">
         {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
+        {view === "customers" && <Customers />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
         {view === "orders" && <Orders stations={data.stations} items={data.items} stock={data.stock} selectedStation={selected} onStationChange={setSelected} onInventoryChange={reload} />}
         {view === "stations" && <><div className="page-heading"><div><div className="eyebrow">MANAGE</div><h1>Workstations</h1><p>Define what each station does and where online orders begin.</p></div><Button onClick={() => open("station")}><Plus size={17}/> Add station</Button></div><div className="station-grid">{data.stations.map(station => <article className="station-card" key={station.id}><div className="station-card-icon"><Warehouse size={21}/></div><h2>{station.name}</h2><p>{station.action || "Station action not set"}</p>{station.location && <small>{station.location}</small>}{!!station.onlineIntake && <span className="badge badge-ok">Online intake</span>}<div className="station-card-actions"><Button size="sm" onClick={() => { setSelected(String(station.id)); setView("inventory"); }}>Inventory</Button><Button size="sm" variant="outline" onClick={() => { setSelected(String(station.id)); setView("orders"); }}>Orders</Button><Button size="sm" variant="ghost" onClick={() => editStation(station)}><Settings2 size={15}/> Edit</Button></div></article>)}</div>{!data.stations.length && <div className="empty"><strong>No stations yet</strong><p>Add a station, describe its action, then place it on the floor plan.</p><Button onClick={() => open("station")}>Add station</Button></div>}</>}
