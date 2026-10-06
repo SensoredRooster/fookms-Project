@@ -6,7 +6,7 @@ import { isOwnerUser, isStaffUser } from "@/app/staff-auth";
 export const dynamic = "force-dynamic";
 const fail = (error: string, status = 400) => NextResponse.json({ error }, { status });
 const clean = (value: unknown) => typeof value === "string" ? value.trim() : "";
-const screens = new Set(["floor", "orders", "inventory", "stations", "catalog", "customers", "issues"]);
+const screens = new Set(["home", "floor", "orders", "inventory", "stations", "catalog", "customers", "issues"]);
 const severities = new Set(["low", "normal", "high"]);
 
 export async function GET() {
