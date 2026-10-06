@@ -25,6 +25,8 @@ export type Customer = {
   comments: string;
   createdAt: string;
   updatedAt: string;
+  orderCount: number;
+  lastOrderAt: string | null;
 };
 
 const blank = {
@@ -37,6 +39,7 @@ export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [profile, setProfile] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(blank);
   const [loading, setLoading] = useState(true);
@@ -134,7 +137,7 @@ export default function Customers() {
           <TableCell>{customer.contactName || "—"}</TableCell>
           <TableCell>{customer.contactPhone || "—"}<span className="cell-sub">{customer.email || ""}</span></TableCell>
           <TableCell><strong>{customer.shipTo || customer.customerName}</strong><span className="cell-sub">{[customer.shipToAddress,customer.shipToCity,customer.shipToState,customer.shipToZip].filter(Boolean).join(", ") || "Same / not entered"}</span></TableCell>
-          <TableCell className="text-right"><Button size="sm" variant="ghost" onClick={() => openEdit(customer)}>Edit</Button></TableCell>
+          <TableCell className="text-right"><div className="customer-row-actions"><Button size="sm" variant="ghost" onClick={() => setProfile(customer)}>View</Button><Button size="sm" variant="ghost" onClick={() => openEdit(customer)}>Edit</Button></div></TableCell>
         </TableRow>)}</TableBody>
       </Table></div>
       {!loading && !visible.length && <div className="empty"><strong>{customers.length ? "No customers match your search" : "No customers saved yet"}</strong><p>Add the first customer to reuse their information on future orders.</p><Button onClick={openNew}>Add customer</Button></div>}
@@ -150,6 +153,7 @@ export default function Customers() {
           <div className="form-grid"><label className="field"><span>City</span><Input maxLength={120} value={form.customerCity} onChange={e => set("customerCity", e.target.value)} /></label><label className="field"><span>State</span><Input maxLength={80} value={form.customerState} onChange={e => set("customerState", e.target.value)} /></label><label className="field"><span>ZIP</span><Input maxLength={30} value={form.customerZip} onChange={e => set("customerZip", e.target.value)} /></label></div>
 
           <div className="rail-label">SHIPPING</div>
+          <Button type="button" variant="outline" className="self-start" onClick={() => setForm(old => ({ ...old, shipTo: old.customerName, shipToAddress: old.customerAddress, shipToCity: old.customerCity, shipToState: old.customerState, shipToZip: old.customerZip }))}>Same as customer address</Button>
           <label className="field"><span>Ship to</span><Input maxLength={200} value={form.shipTo} onChange={e => set("shipTo", e.target.value)} placeholder="Company, department, or recipient" /></label>
           <label className="field"><span>Ship to address</span><Input maxLength={200} value={form.shipToAddress} onChange={e => set("shipToAddress", e.target.value)} /></label>
           <div className="form-grid"><label className="field"><span>Ship to city</span><Input maxLength={120} value={form.shipToCity} onChange={e => set("shipToCity", e.target.value)} /></label><label className="field"><span>Ship to state</span><Input maxLength={80} value={form.shipToState} onChange={e => set("shipToState", e.target.value)} /></label><label className="field"><span>Ship to ZIP</span><Input maxLength={30} value={form.shipToZip} onChange={e => set("shipToZip", e.target.value)} /></label></div>
@@ -161,6 +165,20 @@ export default function Customers() {
           {error && <div className="error" role="alert">{error}</div>}
           <div className="form-actions"><Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save customer" : "Add customer"}</Button></div>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={!!profile} onOpenChange={v => { if (!v) setProfile(null); }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader><DialogTitle>{profile?.customerName || "Customer profile"}</DialogTitle><DialogDescription>Saved customer details and ordering history.</DialogDescription></DialogHeader>
+        {profile && <div className="customer-profile">
+          <section><h3>Customer address</h3><p>{profile.customerAddress || "—"}<br/>{[profile.customerCity, profile.customerState, profile.customerZip].filter(Boolean).join(", ") || "—"}</p></section>
+          <section><h3>Ship to</h3><p><strong>{profile.shipTo || profile.customerName}</strong><br/>{profile.shipToAddress || "—"}<br/>{[profile.shipToCity, profile.shipToState, profile.shipToZip].filter(Boolean).join(", ") || "—"}</p></section>
+          <section><h3>Contact</h3><p><strong>{profile.contactName || "—"}</strong><br/>{profile.contactPhone || "—"}<br/>{profile.email || "—"}</p></section>
+          <section><h3>Order history</h3><p><strong>{profile.orderCount || 0}</strong> linked order{profile.orderCount === 1 ? "" : "s"}{profile.lastOrderAt ? <> · Last order {new Date(profile.lastOrderAt).toLocaleDateString()}</> : ""}</p></section>
+          <section className="customer-profile-comments"><h3>Comments</h3><p>{profile.comments || "No customer comments."}</p></section>
+          <div className="form-actions"><Button variant="outline" onClick={() => { const current = profile; setProfile(null); openEdit(current); }}>Edit customer</Button></div>
+        </div>}
       </DialogContent>
     </Dialog>
   </>;
