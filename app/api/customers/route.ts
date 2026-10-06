@@ -28,7 +28,9 @@ export async function GET() {
         email,
         comments,
         created_at AS createdAt,
-        updated_at AS updatedAt
+        updated_at AS updatedAt,
+        (SELECT COUNT(*) FROM orders o WHERE o.customer_id = customers.id) AS orderCount,
+        (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id = customers.id) AS lastOrderAt
       FROM customers
       ORDER BY customer_name COLLATE NOCASE
     `).all();
