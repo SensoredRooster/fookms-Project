@@ -35,7 +35,7 @@ const blank = {
   contactName: "", contactPhone: "", email: "", comments: "",
 };
 
-export default function Customers() {
+export default function Customers({ startCreateSignal = 0 }: { startCreateSignal?: number }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -74,6 +74,10 @@ export default function Customers() {
   function openNew() {
     setEditing(null); setForm(blank); setError(""); setNotice(""); setCreating(true);
   }
+
+  useEffect(() => {
+    if (startCreateSignal > 0) openNew();
+  }, [startCreateSignal]);
 
   function openEdit(customer: Customer) {
     setEditing(customer);
