@@ -232,21 +232,35 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
         <div className="page-heading"><div><div className="eyebrow">INVENTORY CONTROL</div><h1>{selected === "all" ? "All inventory" : stationName(Number(selected))}</h1><p>{selected === "all" ? "Stock levels across every station." : data.stations.find(s => String(s.id) === selected)?.action || "Configure the action performed at this station."}</p></div><div className="heading-actions"><Select value={selected} onValueChange={setSelected}><SelectTrigger aria-label="Choose inventory station"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All stations</SelectItem>{data.stations.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>{selected !== "all" && <Button variant="outline" onClick={() => { const s = data.stations.find(s => String(s.id) === selected); if (s) editStation(s); }}>Edit station</Button>}<Button variant="outline" onClick={() => open("item")}><Plus size={17} /> Add item</Button><Button onClick={() => open("receive", selected === "all" ? {} : { toStationId: selected })}><ArrowDownToLine size={17} /> Receive stock</Button></div></div>
         {notice && <div className="notice" role="status">{notice}</div>}
         {error && !mode && <div className="error" role="alert">{error} <button onClick={() => void reload()}>Retry</button></div>}
-        <section className="metrics" aria-label="Inventory summary">
+        {selected !== "all" && <section className="metrics" aria-label="Station inventory summary">
           <div className="metric"><span><Boxes size={18} /> {selected === "all" ? "ITEMS TRACKED" : "ITEM TYPES HERE"}</span><strong>{selected === "all" ? rows.length : selectedStationItemCount}</strong><small>{selected === "all" ? "Across all stations" : "Currently at this workstation"}</small></div>
           <div className="metric"><span><Warehouse size={18} /> {selected === "all" ? "ACTIVE STATIONS" : "STATION"}</span><strong>{selected === "all" ? data.stations.length : stationName(Number(selected))}</strong><small>{selected === "all" ? "Available locations" : "Inventory totals below belong only to this workstation"}</small></div>
           <div className="metric alert"><span><CircleAlert size={18} /> LOW STOCK</span><strong>{selected === "all" ? low.length : selectedStationLowCount}</strong><small>{selected === "all" ? "At or below reorder level" : "Items at/below their reorder level here"}</small></div>
           <div className="metric"><span><ArrowRightLeft size={18} /> RECENT MOVES</span><strong>{data.movements.filter(move => selected === "all" || move.fromStationId === Number(selected) || move.toStationId === Number(selected)).length}</strong><small>{selected === "all" ? "Latest recorded activity" : "Movements involving this workstation"}</small></div>
-        </section>
-        {selected === "all" ? <section className="all-stations-inventory">
-          <div className="all-stations-header"><div><h2>Inventory by workstation</h2><p>Current stock physically recorded at each workstation.</p></div><div className="table-actions"><label className="search"><Search size={17} /><input aria-label="Search station inventory" placeholder="Search item or SKU" value={query} onChange={e => setQuery(e.target.value)} /></label><Button variant="outline" onClick={() => open("transfer")} disabled={!data.stations.length || !data.items.length}><ArrowRightLeft size={17} /> Transfer</Button><Button onClick={() => open("produce")} disabled={!data.stations.length || !data.items.length}><Package size={17} /> Finish work → stock</Button></div></div>
-          <div className="station-inventory-grid">{data.stations.map(station => {
-            const stationRows = (stockByStation[station.id] || []).filter(row => row.name.toLowerCase().includes(query.toLowerCase()) || row.sku.toLowerCase().includes(query.toLowerCase()));
-            return <section className="station-inventory-panel" key={station.id}>
-              <div className="station-inventory-head"><div><Warehouse size={18}/><div><h3>{station.name}</h3><p>{station.action || station.location || "Workstation inventory"}</p></div></div><Button size="sm" variant="outline" onClick={() => setSelected(String(station.id))}>Open station</Button></div>
-              {stationRows.length ? <div className="table-scroll"><Table><TableHeader><TableRow><TableHead>ITEM</TableHead><TableHead>SKU</TableHead><TableHead>QUANTITY</TableHead><TableHead className="text-right">ACTION</TableHead></TableRow></TableHeader><TableBody>{stationRows.map(row => <TableRow key={row.itemId}><TableCell><Button variant="link" className="p-0 h-auto font-bold" onClick={() => setDetailItem(row.itemId)}>{row.name}</Button><span className="cell-sub">{row.unit}</span></TableCell><TableCell className="mono">{row.sku}</TableCell><TableCell className="quantity">{row.quantity} {row.unit}</TableCell><TableCell className="text-right"><Button size="sm" variant="ghost" onClick={() => open("use", { itemId: String(row.itemId), fromStationId: String(station.id) })}>Record use</Button></TableCell></TableRow>)}</TableBody></Table></div> : <div className="station-inventory-empty">{query ? "No matching stock at this workstation." : "No stock currently recorded at this workstation."}</div>}
-            </section>;
-          })}</div>
+        </section>}
+        {selected === "all" ? <section className="panel">
+          <div className="panel-title"><div><h2>All workstation inventory</h2><p>Every workstation and its current inventory in one view. Quantities are not combined across stations.</p></div><div className="table-actions"><label className="search"><Search size={17} /><input aria-label="Search all station inventory" placeholder="Search station, item, or SKU" value={query} onChange={e => setQuery(e.target.value)} /></label><Button variant="outline" onClick={() => open("transfer")} disabled={!data.stations.length || !data.items.length}><ArrowRightLeft size={17} /> Transfer</Button><Button onClick={() => open("produce")} disabled={!data.stations.length || !data.items.length}><Package size={17} /> Finish work → stock</Button></div></div>
+          <div className="table-scroll"><Table>
+            <TableHeader><TableRow><TableHead>WORKSTATION</TableHead><TableHead>ITEM</TableHead><TableHead>SKU</TableHead><TableHead>QUANTITY AT STATION</TableHead><TableHead className="text-right">ACTION</TableHead></TableRow></TableHeader>
+            <TableBody>{data.stations.flatMap(station => {
+              const stationRows = (stockByStation[station.id] || []).filter(row => {
+                const q = query.toLowerCase();
+                return !q || station.name.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.sku.toLowerCase().includes(q);
+              });
+              if (!stationRows.length) {
+                const q = query.toLowerCase();
+                if (q && !station.name.toLowerCase().includes(q)) return [];
+                return [<TableRow key={`station-${station.id}-empty`}><TableCell><strong>{station.name}</strong><span className="cell-sub">{station.action || station.location || "Workstation"}</span></TableCell><TableCell colSpan={3}><span className="cell-sub">No inventory currently recorded at this workstation.</span></TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setSelected(String(station.id))}>Open station</Button></TableCell></TableRow>];
+              }
+              return stationRows.map((row, index) => <TableRow key={`${station.id}-${row.itemId}`}>
+                <TableCell>{index === 0 ? <><strong>{station.name}</strong><span className="cell-sub">{station.action || station.location || "Workstation"}</span></> : <span className="cell-sub">↳ {station.name}</span>}</TableCell>
+                <TableCell><Button variant="link" className="p-0 h-auto font-bold" onClick={() => setDetailItem(row.itemId)}>{row.name}</Button><span className="cell-sub">{row.unit}</span></TableCell>
+                <TableCell className="mono">{row.sku}</TableCell>
+                <TableCell className="quantity">{row.quantity} {row.unit}</TableCell>
+                <TableCell className="text-right"><Button size="sm" variant="ghost" onClick={() => open("use", { itemId: String(row.itemId), fromStationId: String(station.id) })}>Record use</Button><Button size="sm" variant="outline" onClick={() => setSelected(String(station.id))}>Open station</Button></TableCell>
+              </TableRow>);
+            })}</TableBody>
+          </Table></div>
           {!loading && !data.stations.length && <div className="empty"><strong>No workstations yet</strong><p>Add a workstation to begin tracking station inventory.</p></div>}
           {loading && <div className="empty">Loading inventory…</div>}
         </section> : <section className="panel">
