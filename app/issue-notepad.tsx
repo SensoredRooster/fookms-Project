@@ -5,9 +5,9 @@ import { CheckCircle2, ClipboardPenLine, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Screen = "floor" | "orders" | "inventory" | "stations" | "catalog" | "customers" | "issues";
+type Screen = "home" | "floor" | "orders" | "inventory" | "stations" | "catalog" | "customers" | "issues";
 type Issue = { id: number; reporterEmail: string; title: string; details: string; steps: string; screen: Screen; severity: string; status: "open" | "resolved"; createdAt: string; updatedAt: string };
-const labels: Record<Screen, string> = { floor: "Floor plan", orders: "Orders", inventory: "Inventory", stations: "Workstations", catalog: "Item catalog", customers: "Customers", issues: "Issue notepad" };
+const labels: Record<Screen, string> = { home: "Home", floor: "Floor plan", orders: "Orders", inventory: "Inventory", stations: "Workstations", catalog: "Item catalog", customers: "Customers", issues: "Issue notepad" };
 
 export default function IssueNotepad({ initialScreen }: { initialScreen: Screen }) {
   const [issues, setIssues] = useState<Issue[]>([]);
