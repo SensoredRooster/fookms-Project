@@ -162,9 +162,6 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
     return { ...item, total };
   }), [data, query, selected]);
   const low = rows.filter(row => row.total <= row.threshold);
-  const selectedStationStock = selected === "all" ? [] : (stockByStation[Number(selected)] || []);
-  const selectedStationUnits = selectedStationStock.reduce((sum, row) => sum + row.quantity, 0);
-  const selectedStationItemCount = selectedStationStock.length;
   const stockByStation = useMemo(() => {
     const grouped: Record<number, { itemId: number; name: string; sku: string; unit: string; quantity: number }[]> = {};
     for (const row of data.stock) {
@@ -176,6 +173,9 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
     for (const stationId of Object.keys(grouped)) grouped[Number(stationId)].sort((a,b) => a.name.localeCompare(b.name));
     return grouped;
   }, [data.stock, data.items]);
+  const selectedStationStock = selected === "all" ? [] : (stockByStation[Number(selected)] || []);
+  const selectedStationUnits = selectedStationStock.reduce((sum, row) => sum + row.quantity, 0);
+  const selectedStationItemCount = selectedStationStock.length;
   const open = (next: Mode, preset: Record<string, string> = {}) => { setMode(next); setForm(next === "item" ? { threshold: "0", ...preset } : preset); setError(""); setNotice(""); };
   const field = (name: string, label: string, props: { type?: string; placeholder?: string; required?: boolean; min?: number } = {}) => (
     <label className="field"><span>{label}</span><Input name={name} value={form[name] || ""} onChange={e => setForm(v => ({ ...v, [name]: e.target.value }))} {...props} /></label>
