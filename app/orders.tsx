@@ -17,7 +17,7 @@ type Line = { orderId: number; itemId: number; quantity: number; cutLengthInches
 type Event = { id: number; orderId: number; itemId: number; type: string; fromStationId: number | null; toStationId: number | null; createdAt: string };
 type OrderData = { orders: Order[]; lines: Line[] };
 const initial: OrderData = { orders: [], lines: [] };
-export default function Orders({ stations, items, stock, selectedStation, onStationChange, onInventoryChange }: { stations: Station[]; items: Item[]; stock: Stock[]; selectedStation: string; onStationChange: (station: string) => void; onInventoryChange: () => Promise<void> }) {
+export default function Orders({ stations, items, stock, selectedStation, onStationChange, onInventoryChange, startCreateSignal = 0 }: { stations: Station[]; items: Item[]; stock: Stock[]; selectedStation: string; onStationChange: (station: string) => void; onInventoryChange: () => Promise<void>; startCreateSignal?: number }) {
   const [data, setData] = useState<OrderData>(initial);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -88,6 +88,10 @@ export default function Orders({ stations, items, stock, selectedStation, onStat
     setStationId(selectedStation === "all" ? "" : selectedStation);
     setEditingId(null); setEditingUpdatedAt(""); setCustomerId(""); setRequestedBy(""); setPurchaseOrderNumber(""); setSource("phone"); setContactEmail(""); setContactPhone(""); setNote(""); setLines([{ itemId: "", quantity: "1", cutLengthInches: "" }]); setError(""); setNotice(""); setCreating(true);
   }
+  useEffect(() => {
+    if (startCreateSignal > 0) start();
+  }, [startCreateSignal]);
+
   function edit(order: Order) {
     setDetail(null); setEditingId(order.id); setEditingUpdatedAt(order.updatedAt);
     setStationId(String(order.stationId)); setCustomerId(order.customerId ? String(order.customerId) : ""); setRequestedBy(order.requestedBy); setPurchaseOrderNumber(order.purchaseOrderNumber);
