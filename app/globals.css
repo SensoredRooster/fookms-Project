@@ -57,6 +57,15 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .detail-line strong { font-weight:700 }
 .detail-line small { display:block; font-size:12px; color:#7e9199; margin-top:4px; line-height:1.5 }
 .order-note { background:#f1f6f7; padding:14px; border-radius:8px; font-size:14px; line-height:1.5 }
+.customer-row-actions { display:flex; justify-content:flex-end; gap:4px }
+.customer-profile { display:grid; grid-template-columns:1fr 1fr; gap:14px }
+.customer-profile section { border:1px solid var(--border); border-radius:9px; padding:14px; background:#fcfefe }
+.customer-profile h3 { margin:0 0 7px; font-size:13px; color:#55727a; letter-spacing:.04em; text-transform:uppercase }
+.customer-profile p { margin:0; font-size:14px; line-height:1.55; color:#314b57 }
+.customer-profile-comments { grid-column:1/-1 }
+.customer-profile .form-actions { grid-column:1/-1 }
+.customer-order-note { display:block; margin-top:5px; padding:8px 10px; border-radius:7px; background:#f4f7f8; color:#5e727b; line-height:1.4 }
+@media(max-width:640px) { .customer-profile { grid-template-columns:1fr }.customer-profile-comments,.customer-profile .form-actions { grid-column:auto } }
 .item-detail { padding:22px 0; overflow:auto }
 .item-detail h3 { font-size:15px; margin:15px 0 8px }
 .item-detail p { color:#70818a; font-size:14px }
