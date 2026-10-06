@@ -124,14 +124,14 @@ export default function Customers({ startCreateSignal = 0 }: { startCreateSignal
 
   return <>
     <div className="page-heading">
-      <div><div className="eyebrow">SALES & ORDERING</div><h1>Customers</h1><p>Save customer, shipping, and contact details once and reuse them on future orders.</p></div>
-      <Button onClick={openNew}><Plus size={17}/> Add customer</Button>
+      <div><div className="eyebrow">SALES & ORDERING</div><h1>Customer profiles</h1><p>Build and maintain reusable customer, shipping, contact, and service records for ordering and sales.</p></div>
+      <Button onClick={openNew}><Plus size={17}/> New customer profile</Button>
     </div>
     {notice && <div className="notice" role="status">{notice}</div>}
     {error && !creating && <div className="error" role="alert">{error}</div>}
     <section className="panel">
       <div className="panel-title">
-        <div><h2><Users size={19}/> Customer records</h2><p>{customers.length} saved customer{customers.length === 1 ? "" : "s"}</p></div>
+        <div><h2><Users size={19}/> Customer profiles</h2><p>{customers.length} saved customer{customers.length === 1 ? "" : "s"}</p></div>
         <label className="search"><Search size={17}/><input aria-label="Search customers" placeholder="Search customer, contact, phone, email..." value={query} onChange={e => setQuery(e.target.value)} /></label>
       </div>
       <div className="table-scroll"><Table>
@@ -150,7 +150,7 @@ export default function Customers({ startCreateSignal = 0 }: { startCreateSignal
 
     <Dialog open={creating} onOpenChange={v => { if (!v) { setCreating(false); setError(""); } }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader><DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle><DialogDescription>Save billing, shipping, and contact information for future ordering and sales.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? "Edit customer profile" : "Build customer profile"}</DialogTitle><DialogDescription>Save billing, shipping, and contact information for future ordering and sales.</DialogDescription></DialogHeader>
         <form className="form" onSubmit={save}>
           <label className="field"><span>Customer name *</span><Input required maxLength={160} value={form.customerName} onChange={e => set("customerName", e.target.value)} /></label>
           <label className="field"><span>Customer address</span><Input maxLength={200} value={form.customerAddress} onChange={e => set("customerAddress", e.target.value)} /></label>
@@ -165,9 +165,9 @@ export default function Customers({ startCreateSignal = 0 }: { startCreateSignal
           <div className="rail-label">CONTACT</div>
           <label className="field"><span>Contact name</span><Input maxLength={160} value={form.contactName} onChange={e => set("contactName", e.target.value)} /></label>
           <div className="form-grid"><label className="field"><span>Contact phone #</span><Input type="tel" maxLength={60} value={form.contactPhone} onChange={e => set("contactPhone", e.target.value)} /></label><label className="field"><span>Email address</span><Input type="email" maxLength={200} value={form.email} onChange={e => set("email", e.target.value)} /></label></div>
-          <label className="field"><span>Comments</span><textarea rows={5} maxLength={4000} value={form.comments} onChange={e => set("comments", e.target.value)} placeholder="Special instructions, terms, preferences, sales notes, etc." /></label>
+          <label className="field"><span>Customer service / sales notes</span><textarea rows={5} maxLength={4000} value={form.comments} onChange={e => set("comments", e.target.value)} placeholder="Service history, sales notes, preferences, terms, special instructions, etc." /></label>
           {error && <div className="error" role="alert">{error}</div>}
-          <div className="form-actions"><Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save customer" : "Add customer"}</Button></div>
+          <div className="form-actions"><Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save customer profile" : "Create customer profile"}</Button></div>
         </form>
       </DialogContent>
     </Dialog>
