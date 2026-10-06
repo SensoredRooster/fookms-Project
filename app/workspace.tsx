@@ -42,6 +42,9 @@ export default function Inventory({ initialView = "home" }: { initialView?: View
   const [openIssueCount, setOpenIssueCount] = useState(0);
   const [issueAlert, setIssueAlert] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [customerCreateSignal, setCustomerCreateSignal] = useState(0);
+  const [orderCreateSignal, setOrderCreateSignal] = useState(0);
+  const [customerCount, setCustomerCount] = useState(0);
 
   const reload = useCallback(async () => {
     try {
@@ -54,6 +57,17 @@ export default function Inventory({ initialView = "home" }: { initialView?: View
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    const loadCustomerCount = async () => {
+      try {
+        const response = await fetch("/api/customers", { cache: "no-store" });
+        if (!response.ok) return;
+        const result = await response.json() as { customers?: unknown[] };
+        setCustomerCount(result.customers?.length || 0);
+      } catch { /* home still works if customer summary is temporarily unavailable */ }
+    };
+    void loadCustomerCount();
+  }, [view, customerCreateSignal]);
   const loadIssueCount = useCallback(async (announce = true) => {
     try {
       const response = await fetch("/api/issues", { cache: "no-store" });
@@ -179,6 +193,13 @@ export default function Inventory({ initialView = "home" }: { initialView?: View
     const item = data.items.find(item => item.id === row.itemId);
     return item ? row.quantity <= item.threshold : false;
   }).length;
+  const lowStockPositions = data.stock.filter(row => {
+    if (row.quantity <= 0) return false;
+    const item = data.items.find(item => item.id === row.itemId);
+    return item ? row.quantity <= item.threshold : false;
+  }).length;
+  const startNewCustomer = () => { setCustomerCreateSignal(value => value + 1); setView("customers"); };
+  const startNewOrder = () => { setOrderCreateSignal(value => value + 1); setView("orders"); };
   const open = (next: Mode, preset: Record<string, string> = {}) => { setMode(next); setForm(next === "item" ? { threshold: "0", ...preset } : preset); setError(""); setNotice(""); };
   const field = (name: string, label: string, props: { type?: string; placeholder?: string; required?: boolean; min?: number } = {}) => (
     <label className="field"><span>{label}</span><Input name={name} value={form[name] || ""} onChange={e => setForm(v => ({ ...v, [name]: e.target.value }))} {...props} /></label>
@@ -224,22 +245,41 @@ export default function Inventory({ initialView = "home" }: { initialView?: View
       <div className="content">
         {issueAlert && <div className="notice" role="alert"><strong>{issueAlert}</strong> <button onClick={() => { setIssueAlert(""); if (view !== "issues") setIssueScreen(view); setView("issues"); }}>View notes</button> <button onClick={() => setIssueAlert("")}>Dismiss</button></div>}
         {view === "home" && <>
-          <div className="page-heading"><div><div className="eyebrow">OPERATIONS</div><h1>Home</h1><p>Current workstation, inventory, customer, and order activity at a glance.</p></div><div className="heading-actions"><Button onClick={() => setView("orders")}><ShoppingCart size={17}/> Enter / view orders</Button><Button variant="outline" onClick={() => setView("customers")}><Users size={17}/> Customers</Button></div></div>
+          <div className="page-heading">
+            <div><div className="eyebrow">POINT OF SALE & OPERATIONS</div><h1>Home</h1><p>Orders, customers, and station inventory from one working screen.</p></div>
+            <div className="heading-actions">
+              <Button onClick={startNewOrder}><Plus size={17}/> New order</Button>
+              <Button onClick={startNewCustomer}><Users size={17}/> New customer</Button>
+              <Button variant="outline" onClick={() => setView("customers")}>Customer profiles</Button>
+              <Button variant="outline" onClick={() => { setSelected("all"); setView("inventory"); }}>Full inventory</Button>
+            </div>
+          </div>
           <section className="metrics" aria-label="Operations overview">
             <div className="metric"><span><Warehouse size={18}/> WORKSTATIONS</span><strong>{data.stations.length}</strong><small>Configured production stations</small></div>
-            <div className="metric"><span><Package size={18}/> STOCK ITEMS</span><strong>{data.stock.filter(row => row.quantity > 0).length}</strong><small>Station/item stock positions</small></div>
-            <div className="metric"><span><Users size={18}/> CUSTOMERS</span><strong>Saved</strong><small>Open Customers to manage profiles</small></div>
-            <div className="metric"><span><Activity size={18}/> RECENT MOVES</span><strong>{data.movements.length}</strong><small>Latest inventory movement records</small></div>
+            <div className="metric"><span><Package size={18}/> INVENTORY POSITIONS</span><strong>{data.stock.filter(row => row.quantity > 0).length}</strong><small>Station/item quantities currently on hand</small></div>
+            <div className="metric alert"><span><CircleAlert size={18}/> LOW STOCK</span><strong>{lowStockPositions}</strong><small>Station inventory at/below reorder level</small></div>
+            <div className="metric"><span><Users size={18}/> CUSTOMERS</span><strong>{customerCount}</strong><small>Saved customer profiles</small></div>
           </section>
-          <div className="home-grid">
-            <section className="panel home-panel"><div className="panel-title"><div><h2>Workstations</h2><p>Open a station to see its current stock.</p></div><Button variant="outline" size="sm" onClick={() => setView("floor")}>Floor plan</Button></div><div className="home-list">{data.stations.map(station => <button key={station.id} className="home-list-row" onClick={() => { setSelected(String(station.id)); setView("inventory"); }}><span><strong>{station.name}</strong><small>{station.action || station.location || "Workstation"}</small></span><span>{(stockByStation[station.id] || []).length} items</span></button>)}{!data.stations.length && <p className="activity-empty">No workstations configured yet.</p>}</div></section>
-            <section className="panel home-panel"><div className="panel-title"><div><h2>Inventory</h2><p>See every station and its inventory in one window.</p></div><Button variant="outline" size="sm" onClick={() => { setSelected("all"); setView("inventory"); }}>All stations</Button></div><div className="home-list">{data.stations.map(station => <div key={station.id} className="home-list-row static"><span><strong>{station.name}</strong><small>{(stockByStation[station.id] || []).length ? (stockByStation[station.id] || []).slice(0,2).map(row => `${row.name}: ${row.quantity} ${row.unit}`).join(" · ") : "No stock recorded"}</small></span><span>{(stockByStation[station.id] || []).length} item types</span></div>)}</div></section>
-          </div>
+          <section className="panel home-inventory-panel">
+            <div className="panel-title">
+              <div><h2>All station inventory</h2><p>Every workstation and every item currently sitting there. No combined totals.</p></div>
+              <div className="table-actions"><Button variant="outline" onClick={() => { setSelected("all"); setView("inventory"); }}>Inventory controls</Button><Button variant="outline" onClick={() => open("transfer")}><ArrowRightLeft size={16}/> Transfer stock</Button></div>
+            </div>
+            <div className="table-scroll"><Table>
+              <TableHeader><TableRow><TableHead>WORKSTATION</TableHead><TableHead>ITEM</TableHead><TableHead>SKU</TableHead><TableHead>QUANTITY AT STATION</TableHead></TableRow></TableHeader>
+              <TableBody>{data.stations.flatMap(station => {
+                const stationRows = stockByStation[station.id] || [];
+                if (!stationRows.length) return [<TableRow key={`home-${station.id}-empty`}><TableCell><strong>{station.name}</strong><span className="cell-sub">{station.action || station.location || "Workstation"}</span></TableCell><TableCell colSpan={3}><span className="cell-sub">No inventory currently recorded at this workstation.</span></TableCell></TableRow>];
+                return stationRows.map((row,index) => <TableRow key={`home-${station.id}-${row.itemId}`}><TableCell>{index === 0 ? <><strong>{station.name}</strong><span className="cell-sub">{station.action || station.location || "Workstation"}</span></> : <span className="cell-sub">↳ {station.name}</span>}</TableCell><TableCell><strong>{row.name}</strong><span className="cell-sub">{row.unit}</span></TableCell><TableCell className="mono">{row.sku}</TableCell><TableCell className="quantity">{row.quantity} {row.unit}</TableCell></TableRow>);
+              })}</TableBody>
+            </Table></div>
+            {!loading && !data.stations.length && <div className="empty"><strong>No workstations yet</strong><p>Add a workstation to begin inventory tracking.</p></div>}
+          </section>
         </>}
         {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
-        {view === "customers" && <Customers />}
+        {view === "customers" && <Customers startCreateSignal={customerCreateSignal} />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} stockByStation={stockByStation} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
-        {view === "orders" && <Orders stations={data.stations} items={data.items} stock={data.stock} selectedStation={selected} onStationChange={setSelected} onInventoryChange={reload} />}
+        {view === "orders" && <Orders stations={data.stations} items={data.items} stock={data.stock} selectedStation={selected} onStationChange={setSelected} onInventoryChange={reload} startCreateSignal={orderCreateSignal} />}
         {view === "stations" && <><div className="page-heading"><div><div className="eyebrow">MANAGE</div><h1>Workstations</h1><p>Define what each station does and where online orders begin.</p></div><Button onClick={() => open("station")}><Plus size={17}/> Add station</Button></div><div className="station-grid">{data.stations.map(station => <article className="station-card" key={station.id}><div className="station-card-icon"><Warehouse size={21}/></div><h2>{station.name}</h2><p>{station.action || "Station action not set"}</p>{station.location && <small>{station.location}</small>}{!!station.onlineIntake && <span className="badge badge-ok">Online intake</span>}<div className="station-card-actions"><Button size="sm" onClick={() => { setSelected(String(station.id)); setView("inventory"); }}>Inventory</Button><Button size="sm" variant="outline" onClick={() => { setSelected(String(station.id)); setView("orders"); }}>Orders</Button><Button size="sm" variant="ghost" onClick={() => editStation(station)}><Settings2 size={15}/> Edit</Button></div></article>)}</div>{!data.stations.length && <div className="empty"><strong>No stations yet</strong><p>Add a station, describe its action, then place it on the floor plan.</p><Button onClick={() => open("station")}>Add station</Button></div>}</>}
         {view === "catalog" && <><div className="page-heading"><div><div className="eyebrow">MANAGE</div><h1>Item catalog</h1><p>Track raw materials and produced stock as separate items with their own units.</p></div><Button onClick={() => open("item")}><Plus size={17}/> Add item</Button></div><section className="panel"><div className="table-scroll"><Table><TableHeader><TableRow><TableHead>ITEM</TableHead><TableHead>SKU</TableHead><TableHead>UNIT</TableHead><TableHead>TOTAL STOCK</TableHead><TableHead>LOW STOCK AT</TableHead><TableHead className="text-right">DETAILS</TableHead></TableRow></TableHeader><TableBody>{data.items.map(item => <TableRow key={item.id}><TableCell className="font-semibold">{item.name}</TableCell><TableCell className="mono">{item.sku}</TableCell><TableCell>{item.unit}</TableCell><TableCell>{data.stock.filter(s => s.itemId===item.id).reduce((sum,s) => sum+s.quantity,0)} {item.unit}</TableCell><TableCell>{item.threshold} {item.unit}</TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => editItem(item)}>Edit</Button><Button variant="ghost" size="sm" onClick={() => setDetailItem(item.id)}>View history</Button></TableCell></TableRow>)}</TableBody></Table></div>{!data.items.length && <div className="empty"><strong>No items yet</strong><p>Add an item to track inventory.</p><Button onClick={() => open("item")}>Add item</Button></div>}</section></>}
         {view === "inventory" && <>
