@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2, Users, House, Activity } from "lucide-react";
+import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2, Users, House } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -327,7 +327,6 @@ export default function Inventory({ initialView = "home" }: { initialView?: View
           {!loading && !selectedStationStock.filter(row => row.name.toLowerCase().includes(query.toLowerCase()) || row.sku.toLowerCase().includes(query.toLowerCase())).length && <div className="empty">{query ? "No inventory at this workstation matches your search." : "No inventory is currently recorded at this workstation."}</div>}
           {loading && <div className="empty">Loading inventory…</div>}
         </section>}
-        <section className="panel activity"><div className="panel-title"><div><h2>Recent activity</h2><p>Latest stock movements across stations.</p></div></div>{data.movements.filter(move => selected === "all" || move.fromStationId === Number(selected) || move.toStationId === Number(selected)).length ? <div className="activity-list">{data.movements.filter(move => selected === "all" || move.fromStationId === Number(selected) || move.toStationId === Number(selected)).slice(0, 8).map(move => <div className="activity-row" key={move.id}><span className="movement-icon"><ArrowRightLeft size={17}/></span><div><strong>{itemName(move.itemId)}</strong><small>{move.fromStationId ? stationName(move.fromStationId) : "Received"} → {move.toStationId ? stationName(move.toStationId) : "Used"}{move.note ? ` · ${move.note}` : ""}</small></div><span className="activity-qty">{move.quantity} {unitFor(move.itemId)}</span><time>{new Date(move.createdAt).toLocaleDateString()}</time></div>)}</div> : <p className="activity-empty">{selected === "all" ? "Movements will appear here when stock is received, used, or transferred." : "No recent movements involve this workstation."}</p>}</section>
         </>}
       </div>
     </main>
