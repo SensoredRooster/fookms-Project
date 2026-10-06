@@ -142,6 +142,19 @@ h1 { font-size:32px; letter-spacing:-.045em; margin:0 0 7px; line-height:1.2 } .
 .station-card p { color:#657982; font-size:14px; margin:0; line-height:1.5 }
 .station-card small { color:#82949b }
 .station-card-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; padding-top:18px }
+.home-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start }
+.home-panel { margin-bottom:0 }
+.home-list { display:grid }
+.home-list-row { width:100%; border:0; border-bottom:1px solid #edf1f2; background:#fff; padding:15px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; text-align:left; color:inherit }
+button.home-list-row:hover { background:#f7fbfb }
+.home-list-row:last-child { border-bottom:0 }
+.home-list-row span:first-child { min-width:0 }
+.home-list-row strong,.home-list-row small { display:block }
+.home-list-row strong { font-size:14px }
+.home-list-row small { margin-top:4px; color:#7a8c94; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.home-list-row > span:last-child { flex:none; font-size:12px; font-weight:800; color:#4c7778 }
+.home-list-row.static { cursor:default }
+@media(max-width:900px) { .home-grid { grid-template-columns:1fr } }
 .all-stations-inventory { display:grid; gap:16px; margin-bottom:20px }
 .all-stations-header { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap }
 .all-stations-header h2 { margin:0 0 5px; font-size:20px }
