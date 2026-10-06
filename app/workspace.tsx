@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2, Users } from "lucide-react";
+import { ArrowDownToLine, ArrowRightLeft, Boxes, CircleAlert, ClipboardList, ClipboardPenLine, Plus, Search, Warehouse, ShoppingCart, Map, Package, Settings2, Users, House, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,9 +21,9 @@ type Movement = { id: number; itemId: number; fromStationId: number | null; toSt
 type Data = { stations: Station[]; items: Item[]; stock: Stock[]; movements: Movement[] };
 type Mode = "station" | "station_edit" | "item" | "item_edit" | "receive" | "use" | "transfer" | "produce";
 const empty: Data = { stations: [], items: [], stock: [], movements: [] };
-type View = "floor" | "orders" | "inventory" | "stations" | "catalog" | "customers" | "issues";
+type View = "home" | "floor" | "orders" | "inventory" | "stations" | "catalog" | "customers" | "issues";
 
-export default function Inventory({ initialView = "floor" }: { initialView?: View }) {
+export default function Inventory({ initialView = "home" }: { initialView?: View }) {
   const [data, setData] = useState<Data>(empty);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -204,8 +204,9 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
 
   return <div className="app-shell">
     <aside className="rail">
-      <button className="brand brand-button" onClick={() => setView("floor")} aria-label="Open floor plan"><span className="brand-icon"><Boxes size={22} /></span><div><strong>Station Inventory</strong><small>Operations workspace</small></div></button>
+      <button className="brand brand-button" onClick={() => setView("home")} aria-label="Open home dashboard"><span className="brand-icon"><Boxes size={22} /></span><div><strong>Station Inventory</strong><small>Operations workspace</small></div></button>
       <div className="rail-label">OPERATIONS</div>
+      <button className={`rail-link ${view === "home" ? "active" : ""}`} onClick={() => setView("home")}><House size={19} /> Home</button>
       <button className={`rail-link ${view === "floor" ? "active" : ""}`} onClick={() => setView("floor")}><Map size={19} /> Floor plan</button>
       <button className={`rail-link ${view === "orders" ? "active" : ""}`} onClick={() => setView("orders")}><ShoppingCart size={19} /> Orders</button>
       <button className={`rail-link ${view === "inventory" ? "active" : ""}`} onClick={() => { setSelected("all"); setView("inventory"); }}><ClipboardList size={19} /> Inventory</button>
@@ -219,9 +220,22 @@ export default function Inventory({ initialView = "floor" }: { initialView?: Vie
       <div className="rail-bottom"><span className="live-dot" /> Shared inventory records</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span>Workspace / {({floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",customers:"Customers",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{!notificationsEnabled && <button className="badge" onClick={() => void enableNoteAlerts()}>Enable note alerts</button>}{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
+      <header className="topbar"><span>Workspace / {({home:"Home",floor:"Floor plan",orders:"Orders",inventory:"Inventory",stations:"Workstations",catalog:"Item catalog",customers:"Customers",issues:"Issue notepad"})[view]}</span><span className="topbar-right">{!notificationsEnabled && <button className="badge" onClick={() => void enableNoteAlerts()}>Enable note alerts</button>}{openIssueCount > 0 && <button className="badge badge-low" onClick={() => { if (view !== "issues") setIssueScreen(view); setView("issues"); }}><CircleAlert size={14}/> {openIssueCount} OPEN {openIssueCount === 1 ? "NOTE" : "NOTES"}</button>} STATION CONTROL <span className="avatar">SI</span></span></header>
       <div className="content">
         {issueAlert && <div className="notice" role="alert"><strong>{issueAlert}</strong> <button onClick={() => { setIssueAlert(""); if (view !== "issues") setIssueScreen(view); setView("issues"); }}>View notes</button> <button onClick={() => setIssueAlert("")}>Dismiss</button></div>}
+        {view === "home" && <>
+          <div className="page-heading"><div><div className="eyebrow">OPERATIONS</div><h1>Home</h1><p>Current workstation, inventory, customer, and order activity at a glance.</p></div><div className="heading-actions"><Button onClick={() => setView("orders")}><ShoppingCart size={17}/> Enter / view orders</Button><Button variant="outline" onClick={() => setView("customers")}><Users size={17}/> Customers</Button></div></div>
+          <section className="metrics" aria-label="Operations overview">
+            <div className="metric"><span><Warehouse size={18}/> WORKSTATIONS</span><strong>{data.stations.length}</strong><small>Configured production stations</small></div>
+            <div className="metric"><span><Package size={18}/> STOCK ITEMS</span><strong>{data.stock.filter(row => row.quantity > 0).length}</strong><small>Station/item stock positions</small></div>
+            <div className="metric"><span><Users size={18}/> CUSTOMERS</span><strong>Saved</strong><small>Open Customers to manage profiles</small></div>
+            <div className="metric"><span><Activity size={18}/> RECENT MOVES</span><strong>{data.movements.length}</strong><small>Latest inventory movement records</small></div>
+          </section>
+          <div className="home-grid">
+            <section className="panel home-panel"><div className="panel-title"><div><h2>Workstations</h2><p>Open a station to see its current stock.</p></div><Button variant="outline" size="sm" onClick={() => setView("floor")}>Floor plan</Button></div><div className="home-list">{data.stations.map(station => <button key={station.id} className="home-list-row" onClick={() => { setSelected(String(station.id)); setView("inventory"); }}><span><strong>{station.name}</strong><small>{station.action || station.location || "Workstation"}</small></span><span>{(stockByStation[station.id] || []).length} items</span></button>)}{!data.stations.length && <p className="activity-empty">No workstations configured yet.</p>}</div></section>
+            <section className="panel home-panel"><div className="panel-title"><div><h2>Inventory</h2><p>See every station and its inventory in one window.</p></div><Button variant="outline" size="sm" onClick={() => { setSelected("all"); setView("inventory"); }}>All stations</Button></div><div className="home-list">{data.stations.map(station => <div key={station.id} className="home-list-row static"><span><strong>{station.name}</strong><small>{(stockByStation[station.id] || []).length ? (stockByStation[station.id] || []).slice(0,2).map(row => `${row.name}: ${row.quantity} ${row.unit}`).join(" · ") : "No stock recorded"}</small></span><span>{(stockByStation[station.id] || []).length} item types</span></div>)}</div></section>
+          </div>
+        </>}
         {view === "issues" && <IssueNotepad initialScreen={issueScreen} />}
         {view === "customers" && <Customers />}
         {view === "floor" && <FloorPlan stationVersion={data.stations.map(s => `${s.id}:${s.name}`).join("|")} stockByStation={stockByStation} onAddStation={() => open("station")} onOpenStation={id => { setSelected(String(id)); setView("inventory"); }} onOpenOrders={id => { setSelected(String(id)); setView("orders"); }} />}
